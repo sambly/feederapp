@@ -1,0 +1,38 @@
+package model
+
+import "time"
+
+type Settings struct {
+	Pairs     []string
+	Timeframe string
+}
+
+type AssetInfo struct {
+	BaseAsset  string
+	QuoteAsset string
+
+	MinPrice    float64
+	MaxPrice    float64
+	MinQuantity float64
+	MaxQuantity float64
+	StepSize    float64
+	TickSize    float64
+
+	QuotePrecision     int
+	BaseAssetPrecision int
+}
+
+type Candle struct {
+	Pair      string
+	Time      time.Time
+	UpdatedAt time.Time
+	Open      float64
+	Close     float64
+	Low       float64
+	High      float64
+	Volume    float64
+	Complete  bool
+
+	// Aditional collums from CSV inputs
+	Metadata map[string]float64
+}
