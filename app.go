@@ -1,37 +1,47 @@
 package main
 
 import (
-	"fmt"
+	"database/sql"
+	"log"
+	"main/database"
 	"main/exchange"
 	"main/model"
 	"main/service"
 )
 
-type App struct {
+type Application struct {
 	settings model.Settings
 	exchange service.Exchange
 	dataFeed *exchange.DataFeedSubscription
+	database *sql.DB
+	infoLog  *log.Logger
+	errorLog *log.Logger
 }
 
-func NewApp(exch service.Exchange, settings model.Settings) (*App, error) {
+func NewApp(exch service.Exchange, settings model.Settings, db *sql.DB) (*Application, error) {
 
-	app := &App{
+	app := &Application{
 		settings: settings,
 		exchange: exch,
 		dataFeed: exchange.NewDataFeed(exch, settings.Timeframe),
+		database: db,
 	}
 	return app, nil
 }
 
-func (n *App) Run() error {
+func (app *Application) Run() error {
 
-	for _, pair := range n.settings.Pairs {
-		n.dataFeed.Subscribe(pair, n.onCandle)
+	for _, pair := range app.settings.Pairs {
+		app.dataFeed.Subscribe(pair, app.onCandle)
 	}
-	n.dataFeed.Start(true)
+	app.dataFeed.Start(true)
 	return nil
 }
 
-func (n *App) onCandle(candle model.Candle) {
-	fmt.Println(candle)
+func (app *Application) onCandle(candle model.Candle) {
+	if candle.Complete {
+		if err := database.InsertCandlesTables(app.database, candle); err != nil {
+			app.logError(err)
+		}
+	}
 }

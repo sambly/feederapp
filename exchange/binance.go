@@ -243,3 +243,17 @@ func CandleFromWsKline(pair string, k binance.WsKline) model.Candle {
 	candle.Metadata = make(map[string]float64)
 	return candle
 }
+
+func (b *Binance) GetPairsToUSDT() ([]string, error) {
+	infoPairs, err := b.client.NewExchangeInfoService().Do(b.ctx)
+	if err != nil {
+		return nil, err
+	}
+	allPairs := make([]string, 0)
+	for _, value := range infoPairs.Symbols {
+		if value.QuoteAsset == "USDT" { // Только пары с USDT
+			allPairs = append(allPairs, value.BaseAsset+value.QuoteAsset)
+		}
+	}
+	return allPairs, nil
+}
