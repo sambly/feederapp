@@ -23,6 +23,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// pairs := []string{"ILVUSDT"}
+
 	settings := model.Settings{
 		Pairs:     pairs,
 		Timeframe: "1m",
@@ -46,7 +48,7 @@ func main() {
 	}
 	defer db.Close()
 
-	err = database.CreateFeederTables(db)
+	err = database.CreateTradesTable(db)
 	if err != nil {
 		log.Fatal(err)
 	}

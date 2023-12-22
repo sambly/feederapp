@@ -131,10 +131,27 @@ func (b *Binance) CandlesSubscription(ctx context.Context, pair, period string) 
 			Max: 1 * time.Second,
 		}
 
+		//list := []binance.WsKline{}
+
 		for {
 			done, _, err := binance.WsKlineServe(pair, period, func(event *binance.WsKlineEvent) {
 				ba.Reset()
 				candle := CandleFromWsKline(pair, event.Kline)
+
+				// if event.Kline.Symbol == "ILVUSDT" {
+				// 	list = append(list, event.Kline)
+				// 	if event.Kline.IsFinal {
+				// 		file, err := json.Marshal(list)
+				// 		if err != nil {
+				// 			fmt.Println("Ошибка записи в файл")
+				// 		}
+				// 		err = os.WriteFile("kline.json", file, 0644)
+				// 		if err != nil {
+				// 			fmt.Println("Ошибка записи в файл WriteFile ")
+				// 		}
+				// 		list = []binance.WsKline{}
+				// 	}
+				// }
 
 				if candle.Complete {
 					// fetch aditional data if needed
@@ -168,6 +185,52 @@ func (b *Binance) CandlesSubscription(ctx context.Context, pair, period string) 
 	}()
 
 	return ccandle, cerr
+}
+
+func (b *Binance) TradesSubscription(ctx context.Context, pair string) (chan model.Trade, chan error) {
+	ctrade := make(chan model.Trade)
+	cerr := make(chan error)
+
+	go func() {
+		ba := &backoff.Backoff{
+			Min: 100 * time.Millisecond,
+			Max: 1 * time.Second,
+		}
+
+		for {
+			done, _, err := binance.WsAggTradeServe(pair, func(event *binance.WsAggTradeEvent) {
+				ba.Reset()
+
+				t := time.Unix(0, event.Time*int64(time.Millisecond))
+				trade := model.Trade{Pair: event.Symbol, Time: t}
+				trade.Price, _ = strconv.ParseFloat(event.Price, 64)
+				trade.Quantity, _ = strconv.ParseFloat(event.Quantity, 64)
+				trade.IsBuyerMaker = event.IsBuyerMaker
+
+				ctrade <- trade
+
+			}, func(err error) {
+				cerr <- err
+			})
+			if err != nil {
+				cerr <- err
+				close(cerr)
+				close(ctrade)
+				return
+			}
+
+			select {
+			case <-ctx.Done():
+				close(cerr)
+				close(ctrade)
+				return
+			case <-done:
+				time.Sleep(ba.Duration())
+			}
+		}
+	}()
+
+	return ctrade, cerr
 }
 
 func (b *Binance) CandlesByLimit(ctx context.Context, pair, period string, limit int) ([]model.Candle, error) {
@@ -239,6 +302,10 @@ func CandleFromWsKline(pair string, k binance.WsKline) model.Candle {
 	candle.High, _ = strconv.ParseFloat(k.High, 64)
 	candle.Low, _ = strconv.ParseFloat(k.Low, 64)
 	candle.Volume, _ = strconv.ParseFloat(k.Volume, 64)
+	candle.QuoteVolume, _ = strconv.ParseFloat(k.QuoteVolume, 64)
+	candle.AmountTrade = k.TradeNum
+	candle.ActiveBuyVolume, _ = strconv.ParseFloat(k.ActiveBuyVolume, 64)
+	candle.ActiveBuyQuoteVolume, _ = strconv.ParseFloat(k.ActiveBuyQuoteVolume, 64)
 	candle.Complete = k.IsFinal
 	candle.Metadata = make(map[string]float64)
 	return candle

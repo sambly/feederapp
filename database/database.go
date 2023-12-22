@@ -58,7 +58,7 @@ func DbConnection() (*sql.DB, error) {
 	return db, nil
 }
 
-func CreateFeederTables(db *sql.DB) error {
+func CreateCandlesTable(db *sql.DB) error {
 
 	query := `CREATE TABLE IF NOT EXISTS candles(
 		Id int primary key auto_increment,
@@ -68,7 +68,11 @@ func CreateFeederTables(db *sql.DB) error {
 		Close text,
 		High text,
 		Low text,
-		Volume text
+		Volume text,
+		QuoteVolume text,
+		AmountTrade text,
+		ActiveBuyVolume text,
+		ActiveBuyQuoteVolume text
 		)`
 
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
@@ -84,9 +88,9 @@ func CreateFeederTables(db *sql.DB) error {
 	return nil
 }
 
-func InsertCandlesTables(db *sql.DB, candle model.Candle) error {
+func InsertCandlesTable(db *sql.DB, candle model.Candle) error {
 
-	query := "INSERT INTO candles (Time,Pair,Open,Close,High,Low,Volume) VALUES (?,?,?,?,?,?,?)"
+	query := "INSERT INTO candles (Time,Pair,Open,Close,High,Low,Volume,QuoteVolume,AmountTrade,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelfunc()
 	stmtLicense, err := db.PrepareContext(ctx, query)
@@ -104,9 +108,71 @@ func InsertCandlesTables(db *sql.DB, candle model.Candle) error {
 		candle.High,
 		candle.Low,
 		candle.Volume,
+		candle.QuoteVolume,
+		candle.AmountTrade,
+		candle.ActiveBuyVolume,
+		candle.ActiveBuyQuoteVolume,
 	)
 	if err != nil {
 		return fmt.Errorf("error %s when inserting row into candles table", err)
+	}
+	_, err = res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error %s when finding rows affected", err)
+	}
+
+	return nil
+}
+
+func CreateTradesTable(db *sql.DB) error {
+
+	query := `CREATE TABLE IF NOT EXISTS trades(
+		Id int primary key auto_increment,
+		Pair text,
+		Time datetime,
+		Price text,
+		QuoteVolume float,
+		AmountTrade int,
+		AmountTradeBuy int,
+		ActiveBuyQuoteVolume float
+		)`
+
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+	res, err := db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("error %s when creating trades table", err)
+	}
+	_, err = res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error %s when getting rows affected", err)
+	}
+	return nil
+}
+
+func InsertTradesTable(db *sql.DB, trade *model.TableCandle) error {
+
+	query := "INSERT INTO trades (Pair,Time,Price,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?)"
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+	stmtLicense, err := db.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("error %s when preparing SQL statement", err)
+	}
+	defer stmtLicense.Close()
+
+	res, err := stmtLicense.ExecContext(
+		ctx,
+		trade.Pair,
+		trade.Time,
+		trade.Price,
+		trade.QuoteVolume,
+		trade.AmountTrade,
+		trade.AmountTradeBuy,
+		trade.ActiveBuyQuoteVolume,
+	)
+	if err != nil {
+		return fmt.Errorf("error %s when inserting row into trades table", err)
 	}
 	_, err = res.RowsAffected()
 	if err != nil {

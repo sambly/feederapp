@@ -7,6 +7,7 @@ import (
 	"main/model"
 	"main/service"
 	"sync"
+	"time"
 )
 
 var (
@@ -26,7 +27,7 @@ func (o *OrderError) Error() string {
 }
 
 type DataFeed struct {
-	Data chan model.Candle
+	Data chan model.Trade
 	Err  chan error
 }
 
@@ -34,6 +35,7 @@ type DataFeedSubscription struct {
 	timeframe               string
 	exchange                service.Exchange
 	Pairs                   []string
+	TradePairs              map[string]*model.TableCandle
 	DataFeeds               map[string]*DataFeed
 	SubscriptionsByDataFeed map[string][]Subscription
 }
@@ -41,19 +43,28 @@ type DataFeedSubscription struct {
 type Subscription struct {
 	consumer DataFeedConsumer
 }
-type DataFeedConsumer func(model.Candle)
+type DataFeedConsumer func(model.Trade)
 
 func NewDataFeed(exchange service.Exchange, timeframe string) *DataFeedSubscription {
 	return &DataFeedSubscription{
 		timeframe:               timeframe,
 		exchange:                exchange,
 		Pairs:                   make([]string, 0),
+		TradePairs:              make(map[string]*model.TableCandle),
 		DataFeeds:               make(map[string]*DataFeed),
 		SubscriptionsByDataFeed: make(map[string][]Subscription),
 	}
 }
 func (d *DataFeedSubscription) Subscribe(pair string, consumer DataFeedConsumer) {
 	d.Pairs = append(d.Pairs, pair)
+
+	t := time.Now()
+	if _, ok := d.TradePairs[pair]; !ok {
+		d.TradePairs[pair] = &model.TableCandle{
+			Pair: pair,
+			Time: time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, time.Local).Add(time.Minute), // Ицициализация времени со следующей минуты
+		}
+	}
 	d.SubscriptionsByDataFeed[pair] = append(d.SubscriptionsByDataFeed[pair], Subscription{
 		consumer: consumer,
 	})
@@ -61,7 +72,7 @@ func (d *DataFeedSubscription) Subscribe(pair string, consumer DataFeedConsumer)
 
 func (d *DataFeedSubscription) Connect() {
 	for _, pair := range d.Pairs {
-		ccandle, cerr := d.exchange.CandlesSubscription(context.Background(), pair, d.timeframe)
+		ccandle, cerr := d.exchange.TradesSubscription(context.Background(), pair)
 		d.DataFeeds[pair] = &DataFeed{
 			Data: ccandle,
 			Err:  cerr,
