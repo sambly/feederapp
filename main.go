@@ -18,12 +18,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	pairs, err := binance.GetPairsToUSDT()
-	if err != nil {
-		log.Fatal(err)
-	}
+	// pairs, err := binance.GetPairsToUSDT()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	// pairs := []string{"ILVUSDT"}
+	pairs := []string{"BTCUSDT"}
 
 	settings := model.Settings{
 		Pairs:     pairs,
@@ -48,7 +48,7 @@ func main() {
 	}
 	defer db.Close()
 
-	err = database.CreateTradesTable(db)
+	err = database.CreateCandlesTable(db)
 	if err != nil {
 		log.Fatal(err)
 	}

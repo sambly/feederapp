@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -11,6 +12,22 @@ import (
 	"github.com/adshao/go-binance/v2"
 	"github.com/jpillora/backoff"
 )
+
+var (
+	ErrInvalidQuantity   = errors.New("invalid quantity")
+	ErrInsufficientFunds = errors.New("insufficient funds or locked")
+	ErrInvalidAsset      = errors.New("invalid asset")
+)
+
+type OrderError struct {
+	Err      error
+	Pair     string
+	Quantity float64
+}
+
+func (o *OrderError) Error() string {
+	return fmt.Sprintf("order error: %v", o.Err)
+}
 
 type MetadataFetchers func(pair string, t time.Time) (string, float64)
 
@@ -56,6 +73,13 @@ func NewBinance(ctx context.Context, options ...BinanceOption) (*Binance, error)
 	if err != nil {
 		return nil, fmt.Errorf("binance ping fail: %w", err)
 	}
+	timeOffset, err := exchange.client.NewSetServerTimeService().Do(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("binance timeOffset fail: %w", err)
+	}
+	fmt.Println("offset")
+	fmt.Println(timeOffset)
+	exchange.client.TimeOffset = timeOffset
 
 	results, err := exchange.client.NewExchangeInfoService().Do(ctx)
 	if err != nil {
@@ -131,35 +155,11 @@ func (b *Binance) CandlesSubscription(ctx context.Context, pair, period string) 
 			Max: 1 * time.Second,
 		}
 
-		//list := []binance.WsKline{}
-
 		for {
 			done, _, err := binance.WsKlineServe(pair, period, func(event *binance.WsKlineEvent) {
 				ba.Reset()
+
 				candle := CandleFromWsKline(pair, event.Kline)
-
-				// if event.Kline.Symbol == "ILVUSDT" {
-				// 	list = append(list, event.Kline)
-				// 	if event.Kline.IsFinal {
-				// 		file, err := json.Marshal(list)
-				// 		if err != nil {
-				// 			fmt.Println("Ошибка записи в файл")
-				// 		}
-				// 		err = os.WriteFile("kline.json", file, 0644)
-				// 		if err != nil {
-				// 			fmt.Println("Ошибка записи в файл WriteFile ")
-				// 		}
-				// 		list = []binance.WsKline{}
-				// 	}
-				// }
-
-				if candle.Complete {
-					// fetch aditional data if needed
-					for _, fetcher := range b.MetadataFetchers {
-						key, value := fetcher(pair, candle.Time)
-						candle.Metadata[key] = value
-					}
-				}
 
 				ccandle <- candle
 
@@ -288,7 +288,7 @@ func CandleFromKline(pair string, k binance.Kline) model.Candle {
 	candle.Close, _ = strconv.ParseFloat(k.Close, 64)
 	candle.High, _ = strconv.ParseFloat(k.High, 64)
 	candle.Low, _ = strconv.ParseFloat(k.Low, 64)
-	candle.Volume, _ = strconv.ParseFloat(k.Volume, 64)
+	candle.VolumeC, _ = strconv.ParseFloat(k.Volume, 64)
 	candle.Complete = true
 	candle.Metadata = make(map[string]float64)
 	return candle
@@ -301,12 +301,13 @@ func CandleFromWsKline(pair string, k binance.WsKline) model.Candle {
 	candle.Close, _ = strconv.ParseFloat(k.Close, 64)
 	candle.High, _ = strconv.ParseFloat(k.High, 64)
 	candle.Low, _ = strconv.ParseFloat(k.Low, 64)
-	candle.Volume, _ = strconv.ParseFloat(k.Volume, 64)
+	candle.VolumeC, _ = strconv.ParseFloat(k.Volume, 64)
 	candle.QuoteVolume, _ = strconv.ParseFloat(k.QuoteVolume, 64)
 	candle.AmountTrade = k.TradeNum
 	candle.ActiveBuyVolume, _ = strconv.ParseFloat(k.ActiveBuyVolume, 64)
 	candle.ActiveBuyQuoteVolume, _ = strconv.ParseFloat(k.ActiveBuyQuoteVolume, 64)
 	candle.Complete = k.IsFinal
+	candle.AmountTradeC = k.TradeNum
 	candle.Metadata = make(map[string]float64)
 	return candle
 }

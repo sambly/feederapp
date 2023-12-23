@@ -30,9 +30,13 @@ type Candle struct {
 	Close                float64
 	Low                  float64
 	High                 float64
-	Volume               float64
+	Price                float64 // временно
+	VolumeC              float64 // Объем от Candle
+	VolumeT              float64 // Объем от trade  Для сравнения
 	QuoteVolume          float64
+	AmountTradeC         int64
 	AmountTrade          int64
+	AmountTradeBuy       int64
 	ActiveBuyVolume      float64
 	ActiveBuyQuoteVolume float64
 
