@@ -96,6 +96,8 @@ func (d *DataFeedSubscription) Start(loadSync bool) {
 	// Ждем следующую минуту, чтобы ws trade начал заполняться с начала минуты
 	go func() {
 		timeStart := time.Now()
+		fmt.Println("Время старта")
+		fmt.Println(timeStart)
 		timeNextMinuteForTrade := time.Date(timeStart.Year(), timeStart.Month(), timeStart.Day(), timeStart.Hour(), timeStart.Minute(), 0, 0, time.Local).Add(time.Minute)
 		timeNextMinuteForCandle := timeNextMinuteForTrade.Add(time.Minute)
 		d.TimeStartTrade = timeNextMinuteForTrade
@@ -103,7 +105,7 @@ func (d *DataFeedSubscription) Start(loadSync bool) {
 
 		for _, pair := range d.Pairs {
 			d.Candles[pair] = &model.Candle{Pair: pair, Time: timeNextMinuteForCandle}
-			d.CandlesBufferTrade[pair] = &model.Candle{Pair: pair, Time: timeNextMinuteForCandle}
+			d.CandlesBufferTrade[pair] = &model.Candle{Pair: pair, Time: timeNextMinuteForTrade}
 		}
 
 		for !d.TradeOn || !d.CandleOn {

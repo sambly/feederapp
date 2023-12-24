@@ -54,13 +54,22 @@ func (app *Application) onTrade(trade model.Trade) {
 
 	if difTime >= time.Duration(time.Minute.Nanoseconds()) {
 
+		candlesBuffer.StartT = false
+
 		candles := app.dataFeed.Candles[trade.Pair]
+
 		candles.Price = candlesBuffer.Price
 		candles.VolumeT = candlesBuffer.VolumeT
 		candles.AmountTrade = candlesBuffer.AmountTrade
 		candles.AmountTradeBuy = candlesBuffer.AmountTradeBuy
 		candles.ActiveBuyQuoteVolume = candlesBuffer.ActiveBuyQuoteVolume
 		candles.CompleteTrade = true
+
+		candles.OpenT = candlesBuffer.OpenT
+		candles.CloseT = candlesBuffer.Price
+		candles.LowT = candlesBuffer.LowT
+		candles.HighT = candlesBuffer.HighT
+
 		app.CompleteCandle(candles)
 
 		candlesBuffer.Time = candlesBuffer.Time.Add(time.Minute)
@@ -71,10 +80,33 @@ func (app *Application) onTrade(trade model.Trade) {
 		candlesBuffer.AmountTradeBuy = 0
 		candlesBuffer.ActiveBuyQuoteVolume = 0
 
+		candlesBuffer.Price = 0
+		candlesBuffer.LowT = 0
+		candlesBuffer.HighT = 0
+		candlesBuffer.OpenT = 0
+		candlesBuffer.CloseT = 0
+
 	}
 
 	if difTime >= 0 {
+		if !candlesBuffer.StartT {
+			candlesBuffer.StartT = true
+			candlesBuffer.OpenT = trade.Price
+		}
+		if candlesBuffer.Price == 0 {
+			candlesBuffer.LowT = trade.Price
+			candlesBuffer.HighT = 0
+		}
 		candlesBuffer.Price = trade.Price
+
+		if candlesBuffer.Price > candlesBuffer.HighT {
+			candlesBuffer.HighT = candlesBuffer.Price
+		}
+
+		if candlesBuffer.Price < candlesBuffer.LowT {
+			candlesBuffer.LowT = candlesBuffer.Price
+		}
+
 		candlesBuffer.VolumeT += math.Round(trade.Quantity*100000) / 100000
 		candlesBuffer.AmountTrade += 1
 		if !trade.IsBuyerMaker {
@@ -117,6 +149,7 @@ func (app *Application) CompleteCandle(candle *model.Candle) {
 		err := database.InsertCandlesTable(app.database, candle)
 		if err != nil {
 			fmt.Println("Ошибка записи")
+			fmt.Println(err)
 		}
 
 		candle.Time = candle.Time.Add(time.Minute)

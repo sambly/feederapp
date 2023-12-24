@@ -65,9 +65,13 @@ func CreateCandlesTable(db *sql.DB) error {
 		Time datetime,
 		Pair text,
 		Open text,
+		OpenT text,
 		Close text,
+		CloseT text,
 		Low text,
+		LowT text,
 		High text,
+		HighT text,
 		Price text,
 		VolumeC text,
 		VolumeT text,
@@ -94,7 +98,7 @@ func CreateCandlesTable(db *sql.DB) error {
 
 func InsertCandlesTable(db *sql.DB, candle *model.Candle) error {
 
-	query := "INSERT INTO candles (Time,Pair,Open,Close,Low,High,Price,VolumeC,VolumeT,QuoteVolume,AmountTradeC,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+	query := "INSERT INTO candles (Time,Pair,Open,OpenT,Close,CloseT,Low,LowT,High,HighT,Price,VolumeC,VolumeT,QuoteVolume,AmountTradeC,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelfunc()
 	stmtLicense, err := db.PrepareContext(ctx, query)
@@ -108,9 +112,13 @@ func InsertCandlesTable(db *sql.DB, candle *model.Candle) error {
 		candle.Time,
 		candle.Pair,
 		candle.Open,
+		candle.OpenT,
 		candle.Close,
+		candle.CloseT,
 		candle.Low,
+		candle.LowT,
 		candle.High,
+		candle.HighT,
 		candle.Price,
 		candle.VolumeC,
 		candle.VolumeT,

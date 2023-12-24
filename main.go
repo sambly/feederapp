@@ -18,12 +18,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// pairs, err := binance.GetPairsToUSDT()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	pairs, err := binance.GetPairsToUSDT()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	pairs := []string{"BTCUSDT"}
+	//pairs := []string{"BTCUSDT"}
 
 	settings := model.Settings{
 		Pairs:     pairs,

@@ -23,13 +23,19 @@ type AssetInfo struct {
 }
 
 type Candle struct {
-	Pair                 string
-	Time                 time.Time
-	UpdatedAt            time.Time
-	Open                 float64
-	Close                float64
-	Low                  float64
-	High                 float64
+	Pair      string
+	Time      time.Time
+	UpdatedAt time.Time
+	Open      float64
+	Close     float64
+	Low       float64
+	High      float64
+	OpenT     float64
+	CloseT    float64
+	LowT      float64
+	HighT     float64
+	StartT    bool
+
 	Price                float64 // временно
 	VolumeC              float64 // Объем от Candle
 	VolumeT              float64 // Объем от trade  Для сравнения
