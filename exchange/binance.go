@@ -198,10 +198,10 @@ func (b *Binance) TradesSubscription(ctx context.Context, pair string) (chan mod
 		}
 
 		for {
-			done, _, err := binance.WsAggTradeServe(pair, func(event *binance.WsAggTradeEvent) {
+			done, _, err := binance.WsTradeServe(pair, func(event *binance.WsTradeEvent) {
 				ba.Reset()
 
-				t := time.Unix(0, event.Time*int64(time.Millisecond))
+				t := time.Unix(0, event.TradeTime*int64(time.Millisecond))
 				trade := model.Trade{Pair: event.Symbol, Time: t}
 				trade.Price, _ = strconv.ParseFloat(event.Price, 64)
 				trade.Quantity, _ = strconv.ParseFloat(event.Quantity, 64)

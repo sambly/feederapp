@@ -40,7 +40,8 @@ type Candle struct {
 	ActiveBuyVolume      float64
 	ActiveBuyQuoteVolume float64
 
-	Complete bool
+	Complete      bool
+	CompleteTrade bool
 
 	// Aditional collums from CSV inputs
 	Metadata map[string]float64

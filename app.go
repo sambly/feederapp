@@ -8,6 +8,7 @@ import (
 	"main/exchange"
 	"main/model"
 	"main/service"
+	"math"
 	"sync"
 	"time"
 )
@@ -48,24 +49,39 @@ func (app *Application) onTrade(trade model.Trade) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
-	difTime := trade.Time.Sub(app.dataFeed.TimeStartTrade)
+	candlesBuffer := app.dataFeed.CandlesBufferTrade[trade.Pair]
+	difTime := trade.Time.Sub(candlesBuffer.Time)
 
-	if app.dataFeed.TradeOn && difTime >= 0 && difTime < time.Duration(time.Minute.Nanoseconds()) {
+	if difTime >= time.Duration(time.Minute.Nanoseconds()) {
 
-		//if app.dataFeed.TradeOn {
+		candles := app.dataFeed.Candles[trade.Pair]
+		candles.Price = candlesBuffer.Price
+		candles.VolumeT = candlesBuffer.VolumeT
+		candles.AmountTrade = candlesBuffer.AmountTrade
+		candles.AmountTradeBuy = candlesBuffer.AmountTradeBuy
+		candles.ActiveBuyQuoteVolume = candlesBuffer.ActiveBuyQuoteVolume
+		candles.CompleteTrade = true
+		app.CompleteCandle(candles)
 
-		c := app.dataFeed.Candles[trade.Pair]
+		candlesBuffer.Time = candlesBuffer.Time.Add(time.Minute)
+		difTime = trade.Time.Sub(candlesBuffer.Time)
 
-		c.Price = trade.Price
-		c.VolumeT += trade.Quantity
-		c.AmountTrade += 1
-		if !trade.IsBuyerMaker {
-			c.AmountTradeBuy += 1
-			c.ActiveBuyQuoteVolume += trade.Price * trade.Quantity
-		}
+		candlesBuffer.VolumeT = 0
+		candlesBuffer.AmountTrade = 0
+		candlesBuffer.AmountTradeBuy = 0
+		candlesBuffer.ActiveBuyQuoteVolume = 0
 
 	}
 
+	if difTime >= 0 {
+		candlesBuffer.Price = trade.Price
+		candlesBuffer.VolumeT += math.Round(trade.Quantity*100000) / 100000
+		candlesBuffer.AmountTrade += 1
+		if !trade.IsBuyerMaker {
+			candlesBuffer.AmountTradeBuy += 1
+			candlesBuffer.ActiveBuyQuoteVolume += trade.Price * trade.Quantity
+		}
+	}
 }
 
 func (app *Application) onCandle(candle model.Candle) {
@@ -74,13 +90,10 @@ func (app *Application) onCandle(candle model.Candle) {
 	defer app.mtx.Unlock()
 
 	c := app.dataFeed.Candles[candle.Pair]
-	//difTime := candle.Time.Sub(app.dataFeed.TimeStartCandle)
 
-	// if app.dataFeed.CandleOn && difTime >= 0 && difTime < time.Duration(time.Minute.Nanoseconds()) {
 	if app.dataFeed.CandleOn {
 
 		if candle.Complete {
-			c.Time = candle.Time
 			c.Open = candle.Open
 			c.Close = candle.Close
 			c.Low = candle.Low
@@ -90,28 +103,30 @@ func (app *Application) onCandle(candle model.Candle) {
 			c.AmountTradeC = candle.AmountTradeC
 			c.Complete = candle.Complete
 
+			app.CompleteCandle(c)
 		}
 
-		if c.Complete {
-			err := database.InsertCandlesTable(app.database, c)
-			if err != nil {
-				fmt.Println("Ошибка записи")
-			}
-			app.dataFeed.TimeStartTrade = app.dataFeed.TimeStartTrade.Add(time.Minute)
-		}
-	}
-
-	if candle.Complete {
-
-		c.VolumeT = 0
-		c.AmountTrade = 0
-		c.AmountTradeBuy = 0
-		c.ActiveBuyQuoteVolume = 0
-		c.Complete = false
 	}
 
 }
 
-func (app *Application) CompleteCandle(candle chan model.Candle) {
+func (app *Application) CompleteCandle(candle *model.Candle) {
+
+	if candle.Complete && candle.CompleteTrade {
+
+		err := database.InsertCandlesTable(app.database, candle)
+		if err != nil {
+			fmt.Println("Ошибка записи")
+		}
+
+		candle.Time = candle.Time.Add(time.Minute)
+		candle.VolumeT = 0
+		candle.AmountTrade = 0
+		candle.AmountTradeBuy = 0
+		candle.ActiveBuyQuoteVolume = 0
+		candle.Complete = false
+		candle.CompleteTrade = false
+
+	}
 
 }
