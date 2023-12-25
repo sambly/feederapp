@@ -10,12 +10,9 @@ import (
 )
 
 type DataFeed struct {
-	DataCandle            chan model.Candle
-	DataTrade             chan model.Trade
-	ErrCandle             chan error
-	ErrTrade              chan error
-	SubscriptionsByCandle []SubscriptionByCandle
-	SubscriptionsByTrade  []SubscriptionByTrade
+	DataTrade            chan model.Trade
+	ErrTrade             chan error
+	SubscriptionsByTrade []SubscriptionByTrade
 }
 
 type DataFeedSubscription struct {
@@ -31,15 +28,10 @@ type DataFeedSubscription struct {
 	CandleOn           bool
 }
 
-type SubscriptionByCandle struct {
-	consumer CandleFeedConsumer
-}
-
 type SubscriptionByTrade struct {
 	consumer TradeFeedConsumer
 }
 
-type CandleFeedConsumer func(model.Candle)
 type TradeFeedConsumer func(model.Trade)
 
 func NewDataFeed(exchange service.Exchange, timeframe string, pairs []string) *DataFeedSubscription {
@@ -54,25 +46,8 @@ func NewDataFeed(exchange service.Exchange, timeframe string, pairs []string) *D
 		TradeOn:            false,
 		CandleOn:           false,
 	}
-	// for _, pair := range pairs {
-	// 	if _, ok := data.Candles[pair]; !ok {
-	// 		data.Candles[pair] = &model.Candle{Pair: pair}
-	// 	}
-	// }
+
 	return data
-}
-func (d *DataFeedSubscription) SubscribeCandle(pair string, consumer CandleFeedConsumer) {
-
-	if _, ok := d.DataFeeds[pair]; !ok {
-		d.DataFeeds[pair] = &DataFeed{}
-	}
-	ccandle, cerr := d.exchange.CandlesSubscription(context.Background(), pair, d.timeframe)
-	d.DataFeeds[pair].DataCandle = ccandle
-	d.DataFeeds[pair].ErrCandle = cerr
-
-	d.DataFeeds[pair].SubscriptionsByCandle = append(d.DataFeeds[pair].SubscriptionsByCandle, SubscriptionByCandle{
-		consumer: consumer,
-	})
 }
 
 func (d *DataFeedSubscription) SubscribeTrade(pair string, consumer TradeFeedConsumer) {
@@ -96,16 +71,15 @@ func (d *DataFeedSubscription) Start(loadSync bool) {
 	// Ждем следующую минуту, чтобы ws trade начал заполняться с начала минуты
 	go func() {
 		timeStart := time.Now()
-		fmt.Println("Время старта")
-		fmt.Println(timeStart)
+		fmt.Printf("Время старта: %s\n", timeStart.Format("15:04:05.00"))
+
 		timeNextMinuteForTrade := time.Date(timeStart.Year(), timeStart.Month(), timeStart.Day(), timeStart.Hour(), timeStart.Minute(), 0, 0, time.Local).Add(time.Minute)
 		timeNextMinuteForCandle := timeNextMinuteForTrade.Add(time.Minute)
 		d.TimeStartTrade = timeNextMinuteForTrade
 		d.TimeStartCandle = timeNextMinuteForCandle
 
 		for _, pair := range d.Pairs {
-			d.Candles[pair] = &model.Candle{Pair: pair, Time: timeNextMinuteForCandle}
-			d.CandlesBufferTrade[pair] = &model.Candle{Pair: pair, Time: timeNextMinuteForTrade}
+			d.Candles[pair] = &model.Candle{Pair: pair, Time: timeNextMinuteForTrade}
 		}
 
 		for !d.TradeOn || !d.CandleOn {
@@ -125,14 +99,7 @@ func (d *DataFeedSubscription) Start(loadSync bool) {
 		go func(key string, feed *DataFeed) {
 			for {
 				select {
-				case candle, ok := <-feed.DataCandle:
-					if !ok {
-						wg.Done()
-						return
-					}
-					for _, subscription := range feed.SubscriptionsByCandle {
-						subscription.consumer(candle)
-					}
+
 				case trade, ok := <-feed.DataTrade:
 					if !ok {
 						wg.Done()
@@ -140,10 +107,6 @@ func (d *DataFeedSubscription) Start(loadSync bool) {
 					}
 					for _, subscription := range feed.SubscriptionsByTrade {
 						subscription.consumer(trade)
-					}
-				case err := <-feed.ErrCandle:
-					if err != nil {
-						fmt.Printf("Ошибка ws candle %s", err.Error())
 					}
 				case err := <-feed.ErrTrade:
 					if err != nil {

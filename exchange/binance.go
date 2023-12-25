@@ -288,7 +288,7 @@ func CandleFromKline(pair string, k binance.Kline) model.Candle {
 	candle.Close, _ = strconv.ParseFloat(k.Close, 64)
 	candle.High, _ = strconv.ParseFloat(k.High, 64)
 	candle.Low, _ = strconv.ParseFloat(k.Low, 64)
-	candle.VolumeC, _ = strconv.ParseFloat(k.Volume, 64)
+	candle.Volume, _ = strconv.ParseFloat(k.Volume, 64)
 	candle.Complete = true
 	candle.Metadata = make(map[string]float64)
 	return candle
@@ -301,13 +301,13 @@ func CandleFromWsKline(pair string, k binance.WsKline) model.Candle {
 	candle.Close, _ = strconv.ParseFloat(k.Close, 64)
 	candle.High, _ = strconv.ParseFloat(k.High, 64)
 	candle.Low, _ = strconv.ParseFloat(k.Low, 64)
-	candle.VolumeC, _ = strconv.ParseFloat(k.Volume, 64)
+	candle.Volume, _ = strconv.ParseFloat(k.Volume, 64)
 	candle.QuoteVolume, _ = strconv.ParseFloat(k.QuoteVolume, 64)
 	candle.AmountTrade = k.TradeNum
 	candle.ActiveBuyVolume, _ = strconv.ParseFloat(k.ActiveBuyVolume, 64)
 	candle.ActiveBuyQuoteVolume, _ = strconv.ParseFloat(k.ActiveBuyQuoteVolume, 64)
 	candle.Complete = k.IsFinal
-	candle.AmountTradeC = k.TradeNum
+	candle.AmountTrade = k.TradeNum
 	candle.Metadata = make(map[string]float64)
 	return candle
 }
