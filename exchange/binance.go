@@ -77,8 +77,6 @@ func NewBinance(ctx context.Context, options ...BinanceOption) (*Binance, error)
 	if err != nil {
 		return nil, fmt.Errorf("binance timeOffset fail: %w", err)
 	}
-	fmt.Println("offset")
-	fmt.Println(timeOffset)
 	exchange.client.TimeOffset = timeOffset
 
 	results, err := exchange.client.NewExchangeInfoService().Do(ctx)
@@ -319,7 +317,7 @@ func (b *Binance) GetPairsToUSDT() ([]string, error) {
 	}
 	allPairs := make([]string, 0)
 	for _, value := range infoPairs.Symbols {
-		if value.QuoteAsset == "USDT" { // Только пары с USDT
+		if value.QuoteAsset == "USDT" && value.Status == "TRADING" { // Только пары с USDT
 			allPairs = append(allPairs, value.BaseAsset+value.QuoteAsset)
 		}
 	}

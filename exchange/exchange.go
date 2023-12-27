@@ -16,17 +16,11 @@ type DataFeed struct {
 }
 
 type DataFeedSubscription struct {
-	timeframe          string
-	exchange           service.Exchange
-	Pairs              []string
-	Candles            map[string]*model.Candle
-	CandlesBufferTrade map[string]*model.Candle
-	DataFeeds          map[string]*DataFeed
-	TimeStartTrade     time.Time
-	TimeStartCandle    time.Time
-	TradeOn            bool
-	CandleOn           bool
-	TrigerFromTrade    chan bool
+	timeframe string
+	exchange  service.Exchange
+	Pairs     []string
+	Candles   map[string]*model.Candle
+	DataFeeds map[string]*DataFeed
 }
 
 type SubscriptionByTrade struct {
@@ -38,14 +32,11 @@ type TradeFeedConsumer func(model.Trade)
 func NewDataFeed(exchange service.Exchange, timeframe string, pairs []string) *DataFeedSubscription {
 
 	data := &DataFeedSubscription{
-		timeframe:          timeframe,
-		exchange:           exchange,
-		Pairs:              pairs,
-		Candles:            make(map[string]*model.Candle),
-		DataFeeds:          make(map[string]*DataFeed),
-		CandlesBufferTrade: make(map[string]*model.Candle),
-		TradeOn:            false,
-		CandleOn:           false,
+		timeframe: timeframe,
+		exchange:  exchange,
+		Pairs:     pairs,
+		Candles:   make(map[string]*model.Candle),
+		DataFeeds: make(map[string]*DataFeed),
 	}
 
 	return data
@@ -69,32 +60,13 @@ func (d *DataFeedSubscription) Start(loadSync bool) {
 
 	wg := new(sync.WaitGroup)
 
-	// Ждем следующую минуту, чтобы ws trade начал заполняться с начала минуты
-	go func() {
-		timeStart := time.Now()
-		fmt.Printf("Время старта: %s\n", timeStart.Format("15:04:05.00"))
+	timeStart := time.Now()
+	fmt.Printf("Время старта: %s\n", timeStart.Format("15:04:05.00"))
 
-		timeNextMinuteForTrade := time.Date(timeStart.Year(), timeStart.Month(), timeStart.Day(), timeStart.Hour(), timeStart.Minute(), 0, 0, time.Local).Add(time.Minute)
-		timeNextMinuteForCandle := timeNextMinuteForTrade.Add(time.Minute)
-		d.TimeStartTrade = timeNextMinuteForTrade
-		d.TimeStartCandle = timeNextMinuteForCandle
-
-		for _, pair := range d.Pairs {
-			d.Candles[pair] = &model.Candle{Pair: pair, Time: timeNextMinuteForTrade}
-		}
-
-		for !d.TradeOn || !d.CandleOn {
-			now := time.Now()
-			currentTime := now.Add(-time.Duration(now.Nanosecond()))
-			if currentTime.Equal(timeNextMinuteForTrade) {
-				d.TradeOn = true
-			}
-			if currentTime.Equal(timeNextMinuteForCandle) {
-				d.CandleOn = true
-			}
-
-		}
-	}()
+	timeNextMinuteForTrade := time.Date(timeStart.Year(), timeStart.Month(), timeStart.Day(), timeStart.Hour(), timeStart.Minute(), 0, 0, time.Local).Add(time.Minute)
+	for _, pair := range d.Pairs {
+		d.Candles[pair] = &model.Candle{Pair: pair, Time: timeNextMinuteForTrade}
+	}
 
 	for key, feed := range d.DataFeeds {
 		wg.Add(1)

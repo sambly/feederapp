@@ -22,8 +22,6 @@ type AssetInfo struct {
 	BaseAssetPrecision int
 }
 
-type WriteComplete bool
-
 type Candle struct {
 	Pair                 string
 	Time                 time.Time
@@ -44,8 +42,6 @@ type Candle struct {
 	Complete      bool
 	CompleteTrade bool
 
-	HistoryWrite map[time.Time]WriteComplete
-
 	// Aditional collums from CSV inputs
 	Metadata map[string]float64
 }
@@ -56,15 +52,4 @@ type Trade struct {
 	Price        float64
 	Quantity     float64
 	IsBuyerMaker bool
-}
-
-type TableCandle struct {
-	Pair                 string
-	Time                 time.Time
-	Price                float64
-	QuoteVolume          float64
-	AmountTrade          int64
-	AmountTradeBuy       int64
-	ActiveBuyQuoteVolume float64
-	Complete             bool
 }

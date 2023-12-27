@@ -20,7 +20,6 @@ type Application struct {
 	database    *sql.DB
 	infoLog     *log.Logger
 	errorLog    *log.Logger
-	candlec     chan model.Candle
 	trigerTrade bool
 }
 
@@ -31,7 +30,6 @@ func NewApp(exch service.Exchange, settings model.Settings, db *sql.DB) (*Applic
 		exchange: exch,
 		dataFeed: exchange.NewDataFeed(exch, settings.Timeframe, settings.Pairs),
 		database: db,
-		candlec:  make(chan model.Candle, 1),
 	}
 	return app, nil
 }
@@ -41,18 +39,19 @@ func (app *Application) Run() error {
 	for _, pair := range app.settings.Pairs {
 		app.dataFeed.SubscribeTrade(pair, app.onTrade)
 	}
-	app.dataFeed.Start(true)
 
 	go func() {
 		for {
 			if app.trigerTrade {
-				timer := time.NewTimer(10 * time.Second)
+				timer := time.NewTimer(5 * time.Second)
 				<-timer.C
 				app.trigerTrade = false
 				app.UpdateCandlesTriger()
 			}
 		}
 	}()
+
+	app.dataFeed.Start(true)
 
 	return nil
 }
@@ -65,18 +64,10 @@ func (app *Application) onTrade(trade model.Trade) {
 	candles := app.dataFeed.Candles[trade.Pair]
 	difTime := trade.Time.Sub(candles.Time)
 
-	if difTime < 0 && app.dataFeed.CandleOn {
-		log.Printf("запись уже была произведена для пары %s\n", candles.Pair)
-		log.Printf("время этой пары: %s\n", trade.Time.Format("15:04:05.00"))
-		log.Printf("целевое время: %s\n", candles.Time.Format("15:04:05.00"))
-
-	}
-
 	if difTime >= time.Duration(time.Minute.Nanoseconds()) {
 
-		fmt.Printf("Произведена запись")
 		app.trigerTrade = true
-		app.WriteTrade(*candles)
+		app.WriteTrade(candles)
 		difTime = trade.Time.Sub(candles.Time)
 	}
 
@@ -110,35 +101,30 @@ func (app *Application) onTrade(trade model.Trade) {
 	}
 }
 
-func (app *Application) WriteTrade(candle model.Candle) {
+func (app *Application) WriteTrade(candle *model.Candle) {
+
+	candle.Time = candle.Time.Add(time.Minute)
+	candle.CompleteTrade = true
+
 	if candle.Volume != 0 {
-		app.CompleteTrade(candle.Pair)
-		app.WriteTradeDatabase(candle)
-		app.ClearTrade(candle.Pair)
+
+		candle.StartT = false
+
+		app.WriteTradeDatabase(*candle)
+
+		candle.Price = 0
+		candle.Low = 0
+		candle.High = 0
+		candle.Open = 0
+		candle.Close = 0
+		candle.Volume = 0
+		candle.QuoteVolume = 0
+		candle.AmountTrade = 0
+		candle.AmountTradeBuy = 0
+		candle.ActiveBuyVolume = 0
+		candle.ActiveBuyQuoteVolume = 0
+
 	}
-}
-
-func (app *Application) ClearTrade(pair string) {
-	candles := app.dataFeed.Candles[pair]
-	candles.StartT = false
-	candles.Price = 0
-	candles.Low = 0
-	candles.High = 0
-	candles.Open = 0
-	candles.Close = 0
-	candles.Volume = 0
-	candles.QuoteVolume = 0
-	candles.AmountTrade = 0
-	candles.AmountTradeBuy = 0
-	candles.ActiveBuyVolume = 0
-	candles.ActiveBuyQuoteVolume = 0
-}
-
-func (app *Application) CompleteTrade(pair string) {
-	candles := app.dataFeed.Candles[pair]
-	candles.StartT = false
-	candles.CompleteTrade = true
-	candles.Time = candles.Time.Add(time.Minute)
 }
 
 func (app *Application) WriteTradeDatabase(candle model.Candle) {
@@ -160,9 +146,8 @@ func (app *Application) UpdateCandlesTriger() {
 
 	for _, pair := range app.dataFeed.Pairs {
 		if !app.dataFeed.Candles[pair].CompleteTrade {
-			app.CompleteTrade(pair)
-			app.WriteTradeDatabase(*app.dataFeed.Candles[pair])
-			app.ClearTrade(pair)
+			app.WriteTrade(app.dataFeed.Candles[pair])
+
 		}
 		app.dataFeed.Candles[pair].CompleteTrade = false
 	}
