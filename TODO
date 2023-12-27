@@ -53,3 +53,40 @@ func main() {
     done <- true
     fmt.Println("Ticker stopped")
 }
+
+
+
+мне нужно сделать отдельный тригер с on trade 
+
+тригер будет срабатывать в отдельном контроллере 
+чтобы не путать нахуй 
+
+где включить тригер 
+
+
+
+
+
+
+
+
+
+
+
+Burner_11320_Drying_2       Burner_11320_Drying_9
+
+Burner_11320_2				Burner_11320_9
+
+Burner_11420_Drying_2		Burner_11420_Drying_9
+
+Burner_11420_2				Burner_11420_9
+
+Burner_191_2				Burner_191_9
+
+Burner_192_2				Burner_192_9
+
+Burner_30106_2				Burner_30106_9
+
+
+
+2-ой						9-ой

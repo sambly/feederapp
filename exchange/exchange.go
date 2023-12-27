@@ -26,6 +26,7 @@ type DataFeedSubscription struct {
 	TimeStartCandle    time.Time
 	TradeOn            bool
 	CandleOn           bool
+	TrigerFromTrade    chan bool
 }
 
 type SubscriptionByTrade struct {
@@ -94,6 +95,7 @@ func (d *DataFeedSubscription) Start(loadSync bool) {
 
 		}
 	}()
+
 	for key, feed := range d.DataFeeds {
 		wg.Add(1)
 		go func(key string, feed *DataFeed) {
