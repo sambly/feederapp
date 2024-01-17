@@ -3,6 +3,7 @@ package exchange
 import (
 	"context"
 	"fmt"
+	"main/log"
 	"main/model"
 	"main/service"
 	"sync"
@@ -61,7 +62,7 @@ func (d *DataFeedSubscription) Start(loadSync bool) {
 	wg := new(sync.WaitGroup)
 
 	timeStart := time.Now()
-	fmt.Printf("Время старта: %s\n", timeStart.Format("15:04:05.00"))
+	log.MyLogger.InfoLog.Printf("Время старта: %s\n", timeStart.Format("15:04:05.00"))
 
 	timeNextMinuteForTrade := time.Date(timeStart.Year(), timeStart.Month(), timeStart.Day(), timeStart.Hour(), timeStart.Minute(), 0, 0, time.Local).Add(time.Minute)
 	for _, pair := range d.Pairs {
@@ -84,7 +85,7 @@ func (d *DataFeedSubscription) Start(loadSync bool) {
 					}
 				case err := <-feed.ErrTrade:
 					if err != nil {
-						fmt.Printf("Ошибка ws trade %s", err.Error())
+						log.MyLogger.ErrorOut(fmt.Errorf("error ws trade: %v", err))
 					}
 				}
 			}

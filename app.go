@@ -3,9 +3,9 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"main/database"
 	"main/exchange"
+	"main/log"
 	"main/model"
 	"main/service"
 	"sync"
@@ -18,8 +18,6 @@ type Application struct {
 	exchange    service.Exchange
 	dataFeed    *exchange.DataFeedSubscription
 	database    *sql.DB
-	infoLog     *log.Logger
-	errorLog    *log.Logger
 	trigerTrade bool
 }
 
@@ -133,8 +131,7 @@ func (app *Application) WriteTradeDatabase(candle model.Candle) {
 		candle.Time = candle.Time.Add(-1 * time.Minute)
 		err := database.InsertCandlesTable(app.database, candle)
 		if err != nil {
-			fmt.Println("Ошибка записи")
-			fmt.Println(err)
+			log.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
 		}
 	}()
 
