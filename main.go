@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 
 	"main/database"
 	"main/exchange"
@@ -25,11 +26,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//pairs := []string{"BTCUSDT", "ILVUSDT", "ETCUSDT", "ETHUSDT", "BNBUSDT", "SANDUSDT"}
-
-	settings := model.Settings{
-		Pairs:     pairs,
-		Timeframe: "1m",
+	periods := []model.Periods{
+		{Name: "ch1m", Duration: time.Second * 60},
+		{Name: "ch3m", Duration: time.Minute * 3},
+		{Name: "ch15m", Duration: time.Minute * 15},
+		{Name: "ch1h", Duration: time.Hour},
+		{Name: "ch4h", Duration: time.Hour * 4},
 	}
 
 	db, err := database.DbConnection()
@@ -38,12 +40,16 @@ func main() {
 	}
 	defer db.Close()
 
-	err = database.CreateCandlesTable(db)
-	if err != nil {
-		log.Fatal(err)
+	for _, period := range periods {
+		err = database.CreateTableName(db, period.Name)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	app, err := NewApp(binance, settings, db)
+	timeframe := "1m"
+
+	app, err := NewApp(binance, db, timeframe, pairs, periods)
 	if err != nil {
 		log.Fatal(err)
 	}
