@@ -63,28 +63,13 @@ func (app *Application) Run() error {
 
 	// После того как получен trigerTrade , через 5 секунд делаем принудительное обновление базы данных
 	// для формирования candle за период 1 минута для тех пар, которые не получили обновление
-
-	// for _, period := range app.periods {
-	// 	go func() {
-	// 		for {
-	// 			if app.trigerTrade[period.Name] {
-	// 				timer := time.NewTimer(5 * time.Second)
-	// 				<-timer.C
-	// 				app.trigerTrade[period.Name] = false
-	// 				app.UpdateCandlesTriger(period)
-	// 			}
-	// 		}
-	// 	}()
-
-	// }
-
 	for _, period := range app.periods {
 		go func(p model.Periods) {
 			for {
-				if app.trigerTrade[p.Name] {
+				if app.GetTrigerTrade(p.Name) {
 					timer := time.NewTimer(5 * time.Second)
 					<-timer.C
-					app.trigerTrade[p.Name] = false
+					app.SetTrigerTrade(p.Name, false)
 					app.UpdateCandlesTriger(p)
 				}
 			}
@@ -210,6 +195,18 @@ func (app *Application) UpdateCandlesTriger(period model.Periods) {
 		candle.CompleteTrade = false
 	}
 
+}
+
+func (app *Application) GetTrigerTrade(period string) bool {
+	app.mtx.Lock()
+	defer app.mtx.Unlock()
+	return app.trigerTrade[period]
+}
+
+func (app *Application) SetTrigerTrade(period string, triger bool) {
+	app.mtx.Lock()
+	defer app.mtx.Unlock()
+	app.trigerTrade[period] = triger
 }
 
 // Поиск близжайшего времени большего времени кратное заданному интервалу
