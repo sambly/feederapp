@@ -45,6 +45,8 @@ func (app *Application) Run() error {
 
 	timeStart := time.Now().Truncate(time.Minute)
 
+	fmt.Println("Время старта : ", timeStart)
+
 	for _, pair := range app.pairs {
 
 		app.dataFeed.SubscribeTrade(pair, app.onTrade)
@@ -89,6 +91,8 @@ func (app *Application) onTrade(trade model.Trade) {
 	difTime := trade.Time.Sub(app.nextTimeMinute[trade.Pair])
 
 	if difTime >= time.Duration(time.Minute.Nanoseconds()) {
+
+		fmt.Println("difTime :", difTime)
 
 		// Надо понять что за таймфрейм записываем
 
