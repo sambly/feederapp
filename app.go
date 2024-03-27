@@ -141,25 +141,26 @@ func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 	candle.Time = candle.Time.Add(period.Duration)
 	candle.CompleteTrade = true
 
-	if candle.Volume != 0 {
+	// TODO что это
+	// if candle.Volume != 0 {
 
-		candle.StartT = false
+	candle.StartT = false
 
-		app.WriteTradeDatabase(*candle, period)
+	app.WriteTradeDatabase(*candle, period)
 
-		candle.Price = 0
-		candle.Low = 0
-		candle.High = 0
-		candle.Open = 0
-		candle.Close = 0
-		candle.Volume = 0
-		candle.QuoteVolume = 0
-		candle.AmountTrade = 0
-		candle.AmountTradeBuy = 0
-		candle.ActiveBuyVolume = 0
-		candle.ActiveBuyQuoteVolume = 0
+	candle.Price = 0
+	candle.Low = 0
+	candle.High = 0
+	candle.Open = 0
+	candle.Close = 0
+	candle.Volume = 0
+	candle.QuoteVolume = 0
+	candle.AmountTrade = 0
+	candle.AmountTradeBuy = 0
+	candle.ActiveBuyVolume = 0
+	candle.ActiveBuyQuoteVolume = 0
 
-	}
+	//}
 }
 
 func (app *Application) WriteTradeDatabase(candle model.Candle, period model.Periods) {

@@ -9,6 +9,8 @@ import (
 	"main/exchange"
 	mylog "main/log"
 	"main/model"
+	"net/http"
+	_ "net/http/pprof"
 )
 
 func main() {
@@ -53,6 +55,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	go http.ListenAndServe(":8080", nil)
 
 	app.Run()
 }
