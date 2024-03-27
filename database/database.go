@@ -191,3 +191,36 @@ func InsertCandlesTableName(db *sql.DB, tableName string, candle model.Candle) e
 
 	return nil
 }
+
+func SelectCandles(db *sql.DB, pair string) ([]model.Candle, error) {
+	candles := []model.Candle{}
+
+	query := "SELECT Time, Pair, Close, Volume FROM candlesch1m WHERE Pair = ?;"
+
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancelfunc()
+	stmt, err := db.PrepareContext(ctx, query)
+	if err != nil {
+		return candles, fmt.Errorf("error %s when preparing SQL statement", err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.QueryContext(ctx, pair)
+	if err != nil {
+		return candles, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var candle model.Candle
+		if err := rows.Scan(&candle.Time, &candle.Pair, &candle.Close, &candle.Volume); err != nil {
+			return candles, err
+		}
+		candles = append(candles, candle)
+	}
+	if err := rows.Err(); err != nil {
+		return candles, err
+	}
+
+	return candles, nil
+}

@@ -21,12 +21,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// pairs, err := binance.GetPairsToUSDT()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	pairs := []string{"ILVUSDT"}
+	pairs, err := binance.GetPairsToUSDT()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	periods := []model.Periods{
 		{Name: "ch1m", Duration: time.Second * 60},

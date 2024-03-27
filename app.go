@@ -47,20 +47,22 @@ func (app *Application) Run() error {
 
 	fmt.Println("Время старта : ", timeStart)
 
+	// Для правильного расчета
+	timeStart = timeStart.Add(time.Minute)
+
 	for _, pair := range app.pairs {
 
 		app.dataFeed.SubscribeTrade(pair, app.onTrade)
 
-		app.nextTimeMinute[pair] = timeStart.Add(time.Minute)
+		//app.nextTimeMinute[pair] = timeStart.Add(time.Minute)
 
 		if _, ok := app.candles[pair]; !ok {
 			app.candles[pair] = map[string]*model.Candle{}
 		}
 		for _, period := range app.periods {
-			nextTime := findNextMultipleTime(timeStart, period.Duration)
+			nextTime := findNextMultipleTimeV2(timeStart, period.Duration)
 			app.candles[pair][period.Name] = &model.Candle{Pair: pair, Time: nextTime}
 		}
-
 	}
 
 	// После того как получен trigerTrade , через 5 секунд делаем принудительное обновление базы данных
@@ -88,34 +90,21 @@ func (app *Application) onTrade(trade model.Trade) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
-	difTime := trade.Time.Sub(app.nextTimeMinute[trade.Pair])
+	for _, period := range app.periods {
 
-	if difTime >= time.Duration(time.Minute.Nanoseconds()) {
+		candle := app.candles[trade.Pair][period.Name]
 
-		fmt.Println("difTime :", difTime)
+		difTime := trade.Time.Sub(candle.Time)
 
-		// Надо понять что за таймфрейм записываем
+		if difTime >= time.Duration(period.Duration) {
+			// Запускаем таймер для полной записи всех пар
+			app.trigerTrade[period.Name] = true
+			app.WriteTrade(candle, period)
+			difTime = trade.Time.Sub(candle.Time)
 
-		for _, period := range app.periods {
-			// TODO Здесь использоваться либо trade.Time.Truncate(time.Minute) либо app.nextTimeMinute , не знаю
-			if isTimeMultipleOfInterval(trade.Time.Truncate(time.Minute), period.Duration) {
-				// Запускаем таймер для полной записи всех пар
-				app.trigerTrade[period.Name] = true
-				candle := app.candles[trade.Pair][period.Name]
-				app.WriteTrade(candle, period)
-
-				app.nextTimeMinute[trade.Pair] = app.nextTimeMinute[trade.Pair].Add(time.Minute)
-
-				difTime = trade.Time.Sub(app.nextTimeMinute[trade.Pair])
-			}
 		}
-	}
 
-	if difTime >= 0 {
-
-		for _, period := range app.periods {
-
-			candle := app.candles[trade.Pair][period.Name]
+		if difTime >= 0 {
 
 			if !candle.StartT {
 				candle.StartT = true
@@ -142,14 +131,13 @@ func (app *Application) onTrade(trade model.Trade) {
 				candle.ActiveBuyVolume += trade.Quantity
 				candle.ActiveBuyQuoteVolume += trade.Price * trade.Quantity
 			}
-
 		}
+
 	}
 }
 
 func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 
-	// Устанавливаем следующую минуту для последующего сравнения ( не минуту а период бля )
 	candle.Time = candle.Time.Add(period.Duration)
 	candle.CompleteTrade = true
 
@@ -183,7 +171,6 @@ func (app *Application) WriteTradeDatabase(candle model.Candle, period model.Per
 			log.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
 		}
 	}()
-
 }
 
 func (app *Application) UpdateCandlesTriger(period model.Periods) {
@@ -198,7 +185,6 @@ func (app *Application) UpdateCandlesTriger(period model.Periods) {
 		}
 		candle.CompleteTrade = false
 	}
-
 }
 
 func (app *Application) GetTrigerTrade(period string) bool {
@@ -229,4 +215,16 @@ func findNextMultipleTime(t time.Time, interval time.Duration) time.Time {
 func isTimeMultipleOfInterval(t time.Time, interval time.Duration) bool {
 	startTime := time.Unix(0, 0) // Начальное время (начало Unix эпохи)
 	return t.Sub(startTime)%interval == 0
+}
+func findNextMultipleTimeV2(t time.Time, interval time.Duration) time.Time {
+	// Находим ближайшее время, которое кратно интервалу, начиная с t
+	remainder := t.Unix() % int64(interval.Seconds())
+	if remainder != 0 {
+		seconds := int64(interval.Seconds())
+		// Добавляем оставшееся время до следующего кратного интервала
+		t = t.Add(time.Duration(seconds-remainder) * time.Second)
+		// Добавляем этот же период времени, так как нужно дождаться чтобы все данные успели сформироваться
+	}
+	t = t.Add(interval)
+	return t
 }
