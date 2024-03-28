@@ -192,6 +192,50 @@ func InsertCandlesTableName(db *sql.DB, tableName string, candle model.Candle) e
 	return nil
 }
 
+func InsertCandlesTableNameV2(db *sql.DB, tableName string, candles []model.Candle) error {
+	if len(candles) == 0 {
+		return nil // Нет свечей для вставки, возвращаем nil
+	}
+
+	query := fmt.Sprintf("INSERT INTO %s (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", "candles"+tableName)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+
+	stmtLicense, err := db.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("error %s when preparing SQL statement", err)
+	}
+	defer stmtLicense.Close()
+
+	for _, candle := range candles {
+		res, err := stmtLicense.ExecContext(
+			ctx,
+			candle.Time,
+			candle.Pair,
+			candle.Open,
+			candle.Close,
+			candle.Low,
+			candle.High,
+			candle.Volume,
+			candle.QuoteVolume,
+			candle.AmountTrade,
+			candle.AmountTradeBuy,
+			candle.ActiveBuyVolume,
+			candle.ActiveBuyQuoteVolume,
+		)
+		if err != nil {
+			return fmt.Errorf("error %s when inserting row into %s table", err, "candles"+tableName)
+		}
+
+		_, err = res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("error %s when finding rows affected", err)
+		}
+	}
+
+	return nil
+}
+
 func SelectCandles(db *sql.DB, pair string) ([]model.Candle, error) {
 	candles := []model.Candle{}
 

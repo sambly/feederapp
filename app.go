@@ -19,10 +19,11 @@ type Application struct {
 	dataFeed *exchange.DataFeedSubscription
 	database *sql.DB
 
-	pairs       []string
-	periods     []model.Periods
-	candles     map[string]map[string]*model.Candle
-	trigerTrade map[string]*trigerTrade
+	pairs         []string
+	periods       []model.Periods
+	candles       map[string]map[string]*model.Candle
+	candlesBuffer map[string][]model.Candle
+	trigerTrade   map[string]*trigerTrade
 }
 
 type trigerTrade struct {
@@ -37,10 +38,11 @@ func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string,
 		dataFeed: exchange.NewDataFeed(exch, timeframe),
 		database: db,
 
-		pairs:       pairs,
-		periods:     periods,
-		candles:     make(map[string]map[string]*model.Candle),
-		trigerTrade: make(map[string]*trigerTrade),
+		pairs:         pairs,
+		periods:       periods,
+		candles:       make(map[string]map[string]*model.Candle),
+		candlesBuffer: make(map[string][]model.Candle),
+		trigerTrade:   make(map[string]*trigerTrade),
 	}
 	return app, nil
 }
@@ -70,6 +72,7 @@ func (app *Application) Run() error {
 	}
 
 	for _, period := range app.periods {
+		app.candlesBuffer[period.Name] = []model.Candle{}
 		app.trigerTrade[period.Name] = &trigerTrade{signal: make(chan bool), active: false}
 	}
 
@@ -152,6 +155,11 @@ func (app *Application) onTrade(trade model.Trade) {
 	}
 }
 
+func (app *Application) WriteCandleBuffer(candle model.Candle, period model.Periods) {
+	candle.Time = candle.Time.Add(-1 * period.Duration)
+	app.candlesBuffer[period.Name] = append(app.candlesBuffer[period.Name], candle)
+}
+
 func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 
 	candle.Time = candle.Time.Add(period.Duration)
@@ -162,7 +170,9 @@ func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 
 	candle.StartT = false
 
-	app.WriteTradeDatabase(*candle, period)
+	//app.WriteTradeDatabase(*candle, period)
+
+	app.WriteCandleBuffer(*candle, period)
 
 	candle.Price = 0
 	candle.Low = 0
@@ -179,17 +189,20 @@ func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 	//}
 }
 
-func (app *Application) WriteTradeDatabase(candle model.Candle, period model.Periods) {
+func (app *Application) WriteTradeDatabase(period model.Periods) {
 
 	go func() {
 		start := time.Now()
-		candle.Time = candle.Time.Add(-1 * period.Duration)
-		err := database.InsertCandlesTableName(app.database, period.Name, candle)
+
+		err := database.InsertCandlesTableNameV2(app.database, period.Name, app.candlesBuffer[period.Name])
 		if err != nil {
 			log.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
 		}
+
+		app.candlesBuffer[period.Name] = []model.Candle{}
+
 		duration := time.Since(start)
-		log.MyLogger.InfoLog.Printf("t:%v  pair %s   time %s", duration, candle.Pair, candle.Time.String())
+		log.MyLogger.InfoLog.Printf("t:%v ", duration)
 
 	}()
 }
@@ -198,17 +211,17 @@ func (app *Application) UpdateCandlesTriger(period model.Periods) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
-	item := 0
 	for _, pair := range app.pairs {
 		candle := app.candles[pair][period.Name]
 		if !candle.CompleteTrade {
-			item += 1
 			app.WriteTrade(candle, period)
 
 		}
 		candle.CompleteTrade = false
 	}
-	fmt.Println("Колличество пар которые не успели сформироваться : ", item)
+
+	// Запись в базу данных
+	app.WriteTradeDatabase(period)
 
 }
 
