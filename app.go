@@ -8,6 +8,7 @@ import (
 	"main/log"
 	"main/model"
 	"main/service"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -18,11 +19,15 @@ type Application struct {
 	dataFeed *exchange.DataFeedSubscription
 	database *sql.DB
 
-	pairs          []string
-	periods        []model.Periods
-	candles        map[string]map[string]*model.Candle
-	nextTimeMinute map[string]time.Time // Для пар
-	trigerTrade    map[string]bool      // Для периодов
+	pairs       []string
+	periods     []model.Periods
+	candles     map[string]map[string]*model.Candle
+	trigerTrade map[string]*trigerTrade
+}
+
+type trigerTrade struct {
+	signal chan bool
+	active bool
 }
 
 func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string, periods []model.Periods) (*Application, error) {
@@ -32,16 +37,17 @@ func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string,
 		dataFeed: exchange.NewDataFeed(exch, timeframe),
 		database: db,
 
-		pairs:          pairs,
-		periods:        periods,
-		candles:        make(map[string]map[string]*model.Candle),
-		nextTimeMinute: make(map[string]time.Time),
-		trigerTrade:    make(map[string]bool),
+		pairs:       pairs,
+		periods:     periods,
+		candles:     make(map[string]map[string]*model.Candle),
+		trigerTrade: make(map[string]*trigerTrade),
 	}
 	return app, nil
 }
 
 func (app *Application) Run() error {
+
+	// go checkForDeadlock()
 
 	timeStart := time.Now().Truncate(time.Minute)
 
@@ -54,8 +60,6 @@ func (app *Application) Run() error {
 
 		app.dataFeed.SubscribeTrade(pair, app.onTrade)
 
-		//app.nextTimeMinute[pair] = timeStart.Add(time.Minute)
-
 		if _, ok := app.candles[pair]; !ok {
 			app.candles[pair] = map[string]*model.Candle{}
 		}
@@ -65,19 +69,29 @@ func (app *Application) Run() error {
 		}
 	}
 
-	// После того как получен trigerTrade , через 5 секунд делаем принудительное обновление базы данных
-	// для формирования candle за период 1 минута для тех пар, которые не получили обновление
 	for _, period := range app.periods {
-		go func(p model.Periods) {
-			for {
-				if app.GetTrigerTrade(p.Name) {
-					timer := time.NewTimer(5 * time.Second)
-					<-timer.C
-					app.SetTrigerTrade(p.Name, false)
-					app.UpdateCandlesTriger(p)
-				}
+		app.trigerTrade[period.Name] = &trigerTrade{signal: make(chan bool), active: false}
+	}
+
+	periodByName := func(name string) model.Periods {
+		for _, period := range app.periods {
+			if period.Name == name {
+				return period
 			}
-		}(period)
+		}
+		return model.Periods{}
+	}
+
+	for name, triger := range app.trigerTrade {
+		go func(name string, triger *trigerTrade) {
+			for range triger.signal {
+				app.SetTrigerTrade(name, true)
+				timer := time.NewTimer(5 * time.Second)
+				<-timer.C
+				app.SetTrigerTrade(name, false)
+				app.UpdateCandlesTriger(periodByName(name))
+			}
+		}(name, triger)
 	}
 
 	app.dataFeed.Start(true)
@@ -98,7 +112,9 @@ func (app *Application) onTrade(trade model.Trade) {
 
 		if difTime >= time.Duration(period.Duration) {
 			// Запускаем таймер для полной записи всех пар
-			app.trigerTrade[period.Name] = true
+			if !app.trigerTrade[period.Name].active {
+				app.trigerTrade[period.Name].signal <- true
+			}
 			app.WriteTrade(candle, period)
 			difTime = trade.Time.Sub(candle.Time)
 
@@ -166,11 +182,15 @@ func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 func (app *Application) WriteTradeDatabase(candle model.Candle, period model.Periods) {
 
 	go func() {
+		start := time.Now()
 		candle.Time = candle.Time.Add(-1 * period.Duration)
 		err := database.InsertCandlesTableName(app.database, period.Name, candle)
 		if err != nil {
 			log.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
 		}
+		duration := time.Since(start)
+		log.MyLogger.InfoLog.Printf("t:%v  pair %s   time %s", duration, candle.Pair, candle.Time.String())
+
 	}()
 }
 
@@ -178,26 +198,30 @@ func (app *Application) UpdateCandlesTriger(period model.Periods) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
+	item := 0
 	for _, pair := range app.pairs {
 		candle := app.candles[pair][period.Name]
 		if !candle.CompleteTrade {
+			item += 1
 			app.WriteTrade(candle, period)
 
 		}
 		candle.CompleteTrade = false
 	}
+	fmt.Println("Колличество пар которые не успели сформироваться : ", item)
+
 }
 
-func (app *Application) GetTrigerTrade(period string) bool {
-	app.mtx.Lock()
-	defer app.mtx.Unlock()
-	return app.trigerTrade[period]
-}
+// func (app *Application) GetTrigerTrade(period string) bool {
+// 	app.mtx.Lock()
+// 	defer app.mtx.Unlock()
+// 	return app.trigerTrade[period]
+// }
 
-func (app *Application) SetTrigerTrade(period string, triger bool) {
+func (app *Application) SetTrigerTrade(period string, value bool) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
-	app.trigerTrade[period] = triger
+	app.trigerTrade[period].active = value
 }
 
 // Поиск близжайшего времени большего времени кратное заданному интервалу
@@ -228,4 +252,12 @@ func findNextMultipleTimeV2(t time.Time, interval time.Duration) time.Time {
 	}
 	t = t.Add(interval)
 	return t
+}
+
+func checkForDeadlock() {
+	for {
+		time.Sleep(5 * time.Second) // Проверка каждые 5 секунд
+		goroutineCount := runtime.NumGoroutine()
+		fmt.Println("Number of goroutines:", goroutineCount)
+	}
 }
