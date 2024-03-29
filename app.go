@@ -23,12 +23,34 @@ type Application struct {
 	periods       []model.Periods
 	candles       map[string]map[string]*model.Candle
 	candlesBuffer map[string][]model.Candle
-	trigerTrade   map[string]*trigerTrade
+	trigers       *trigersTrade
+}
+
+type trigersTrade struct {
+	mtx         sync.Mutex
+	trigerTrade map[string]*trigerTrade
 }
 
 type trigerTrade struct {
 	signal chan bool
 	active bool
+}
+
+func (trig *trigersTrade) SetTrigerTrade(period string, value bool) {
+	trig.mtx.Lock()
+	defer trig.mtx.Unlock()
+
+	fmt.Println("SetTrigerTrade:", period, value)
+	trig.trigerTrade[period].active = value
+}
+
+func (trig *trigersTrade) GetTrigerTrade(period string) {
+	trig.mtx.Lock()
+	defer trig.mtx.Unlock()
+
+	if !trig.trigerTrade[period].active {
+		trig.trigerTrade[period].signal <- true
+	}
 }
 
 func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string, periods []model.Periods) (*Application, error) {
@@ -42,7 +64,7 @@ func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string,
 		periods:       periods,
 		candles:       make(map[string]map[string]*model.Candle),
 		candlesBuffer: make(map[string][]model.Candle),
-		trigerTrade:   make(map[string]*trigerTrade),
+		trigers:       &trigersTrade{trigerTrade: map[string]*trigerTrade{}},
 	}
 	return app, nil
 }
@@ -71,7 +93,7 @@ func (app *Application) Run() error {
 
 	for _, period := range app.periods {
 		app.candlesBuffer[period.Name] = []model.Candle{}
-		app.trigerTrade[period.Name] = &trigerTrade{signal: make(chan bool), active: false}
+		app.trigers.trigerTrade[period.Name] = &trigerTrade{signal: make(chan bool), active: false}
 	}
 
 	periodByName := func(name string) model.Periods {
@@ -83,14 +105,14 @@ func (app *Application) Run() error {
 		return model.Periods{}
 	}
 
-	for name, triger := range app.trigerTrade {
+	for name, triger := range app.trigers.trigerTrade {
 		go func(name string, triger *trigerTrade) {
 			for range triger.signal {
-				app.SetTrigerTrade(name, true)
+				app.trigers.SetTrigerTrade(name, true)
 				timer := time.NewTimer(5 * time.Second)
 				<-timer.C
 				fmt.Println("Сработал таймер записи периода:", name)
-				app.SetTrigerTrade(name, false)
+				app.trigers.SetTrigerTrade(name, false)
 				app.UpdateCandlesTriger(periodByName(name))
 			}
 		}(name, triger)
@@ -114,10 +136,7 @@ func (app *Application) onTrade(trade model.Trade) {
 
 		if difTime >= time.Duration(period.Duration) {
 			// Запускаем таймер для полной записи всех пар
-			if !app.trigerTrade[period.Name].active {
-				fmt.Println("Ща отправим сигнал на запись ", period.Name)
-				app.trigerTrade[period.Name].signal <- true
-			}
+			app.trigers.GetTrigerTrade(period.Name)
 			app.WriteTrade(candle, period)
 			difTime = trade.Time.Sub(candle.Time)
 
@@ -217,14 +236,6 @@ func (app *Application) UpdateCandlesTriger(period model.Periods) {
 	// Запись в базу данных
 	app.WriteTradeDatabase(period)
 
-}
-
-func (app *Application) SetTrigerTrade(period string, value bool) {
-	app.mtx.Lock()
-	defer app.mtx.Unlock()
-
-	fmt.Println("SetTrigerTrade:", period, value)
-	app.trigerTrade[period].active = value
 }
 
 // Поиск близжайшего времени большего времени кратное заданному интервалу

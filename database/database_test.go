@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"main/exchange"
+	"main/model"
 	"testing"
 	"time"
 )
@@ -34,8 +35,14 @@ func TestSelectCandlesTable(t *testing.T) {
 }
 
 // Проверка содерижт ли candle достоверные данные за период
-
 func TestDataCandle(t *testing.T) {
+
+	// НЕОБХОДИМЫЕ ДАННЫЕ
+	tableName := "ch1m"
+
+	pair := "ILVUSDT"
+	period := "1m"
+	limit := 10
 
 	ctx := context.Background()
 	binance, err := exchange.NewBinance(ctx)
@@ -49,30 +56,59 @@ func TestDataCandle(t *testing.T) {
 	}
 	defer db.Close()
 
-	// НЕОБХОДИМЫЕ ДАННЫЕ
-	tableName := "ch1m"
-	timeCandleSTR := "2024-03-29 11:40:00"
-	pair := "FLOKIUSDT"
-
-	timeCandle, err := time.Parse("2006-01-02 15:04:05", timeCandleSTR)
-	if err != nil {
-		t.Error(err)
-	}
-	candle, err := SelectCandle(db, tableName, pair, timeCandle)
+	candles, err := binance.CandlesByLimit(ctx, pair, period, limit)
 	if err != nil {
 		t.Error(err)
 	}
 
-	fmt.Printf("%v", candle)
-	fmt.Println()
-
-	candles, err := binance.CandlesByLimit(ctx, pair, "1m", 10)
-	if err != nil {
-		t.Error(err)
+	notVS := func(cEx, cDb model.Candle) {
+		fmt.Printf("----Excange------\n%v\n", cEx)
+		fmt.Printf("----DB------\n%v\n", cDb)
 	}
 
-	for _, candle := range candles {
-		fmt.Printf("%v", candle)
-		fmt.Println()
+	allCandles := 0
+	checkCandles := 0
+	for _, candleExch := range candles {
+
+		candleDb, err := SelectCandle(db, tableName, candleExch.Pair, candleExch.Time)
+		if err != nil {
+			t.Error(err)
+		}
+		allCandles += 1
+
+		// VS
+		if candleDb.Time.Equal(candleExch.Time) {
+
+			checkCandles += 1
+
+			if candleDb.Open != candleExch.Open {
+				notVS(candleExch, candleDb)
+				continue
+			}
+			if candleDb.Close != candleExch.Close {
+				notVS(candleExch, candleDb)
+				continue
+			}
+			if candleDb.Low != candleExch.Low {
+				notVS(candleExch, candleDb)
+				continue
+			}
+			if candleDb.High != candleExch.High {
+				notVS(candleExch, candleDb)
+				continue
+			}
+			if candleDb.Volume != candleExch.Volume {
+				notVS(candleExch, candleDb)
+				continue
+			}
+			if candleDb.AmountTrade != candleExch.AmountTrade {
+				notVS(candleExch, candleDb)
+				continue
+			}
+		}
+
 	}
+	fmt.Println("Запрошенные Candles: ", allCandles)
+	fmt.Println("Проверенные Candles:", checkCandles)
+
 }
