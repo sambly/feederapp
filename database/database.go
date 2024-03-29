@@ -236,6 +236,57 @@ func InsertCandlesTableNameV2(db *sql.DB, tableName string, candles []model.Cand
 	return nil
 }
 
+func InsertCandlesTableNameV3(db *sql.DB, tableName string, candles []model.Candle) error {
+	if len(candles) == 0 {
+		return nil // Нет свечей для вставки, возвращаем nil
+	}
+
+	query := fmt.Sprintf("INSERT INTO %s (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", "candles"+tableName)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelfunc()
+
+	// Начинаем транзакцию
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("error %s when beginning transaction", err)
+	}
+	defer tx.Rollback()
+
+	stmtLicense, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("error %s when preparing SQL statement", err)
+	}
+	defer stmtLicense.Close()
+
+	for _, candle := range candles {
+		_, err := stmtLicense.ExecContext(
+			ctx,
+			candle.Time,
+			candle.Pair,
+			candle.Open,
+			candle.Close,
+			candle.Low,
+			candle.High,
+			candle.Volume,
+			candle.QuoteVolume,
+			candle.AmountTrade,
+			candle.AmountTradeBuy,
+			candle.ActiveBuyVolume,
+			candle.ActiveBuyQuoteVolume,
+		)
+		if err != nil {
+			return fmt.Errorf("error %s when inserting row into %s table", err, "candles"+tableName)
+		}
+	}
+
+	// Коммитим транзакцию
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error %s when committing transaction", err)
+	}
+
+	return nil
+}
+
 func SelectCandles(db *sql.DB, pair string) ([]model.Candle, error) {
 	candles := []model.Candle{}
 
@@ -267,4 +318,42 @@ func SelectCandles(db *sql.DB, pair string) ([]model.Candle, error) {
 	}
 
 	return candles, nil
+}
+
+func SelectCandle(db *sql.DB, tableName, pair string, timeRounding time.Time) (model.Candle, error) {
+
+	candle := model.Candle{}
+
+	query := fmt.Sprintf("select Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume from %s WHERE Pair = ? and Time = ?;", "candles"+tableName)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancelfunc()
+	stmt, err := db.PrepareContext(ctx, query)
+
+	if err != nil {
+		return candle, fmt.Errorf("error %s when preparing SQL statement", err)
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRowContext(ctx, pair, timeRounding.Format("2006-01-02 15:04:05")).Scan(
+		&candle.Time,
+		&candle.Pair,
+		&candle.Open,
+		&candle.Close,
+		&candle.Low,
+		&candle.High,
+		&candle.Volume,
+		&candle.QuoteVolume,
+		&candle.AmountTrade,
+		&candle.AmountTradeBuy,
+		&candle.ActiveBuyVolume,
+		&candle.ActiveBuyQuoteVolume,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return candle, nil
+		}
+		return candle, err
+	}
+
+	return candle, nil
 }

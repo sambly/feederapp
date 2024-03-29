@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type Settings struct {
 	Pairs     []string
@@ -50,6 +53,22 @@ type Candle struct {
 
 	// Aditional collums from CSV inputs
 	Metadata map[string]float64
+}
+
+func (c Candle) String() string {
+	return fmt.Sprintf("Time: %s\n"+
+		"Pair: %s\n"+
+		"Open: %v\n"+
+		"Close: %v\n"+
+		"Low: %v\n"+
+		"High: %v\n"+
+		"Volume: %v\n"+
+		"QuoteVolume: %v\n"+
+		"AmountTrade: %v\n"+
+		"AmountTradeBuy: %v\n"+
+		"ActiveBuyVolume: %v\n"+
+		"ActiveBuyQuoteVolume: %v\n",
+		c.Time, c.Pair, c.Open, c.Close, c.Low, c.High, c.Volume, c.QuoteVolume, c.AmountTrade, c.AmountTradeBuy, c.ActiveBuyVolume, c.ActiveBuyQuoteVolume)
 }
 
 type Trade struct {

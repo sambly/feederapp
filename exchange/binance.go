@@ -288,6 +288,8 @@ func CandleFromKline(pair string, k binance.Kline) model.Candle {
 	candle.Low, _ = strconv.ParseFloat(k.Low, 64)
 	candle.Volume, _ = strconv.ParseFloat(k.Volume, 64)
 	candle.Complete = true
+	candle.AmountTrade = k.TradeNum
+
 	candle.Metadata = make(map[string]float64)
 	return candle
 }

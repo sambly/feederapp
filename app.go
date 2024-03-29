@@ -49,8 +49,6 @@ func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string,
 
 func (app *Application) Run() error {
 
-	// go checkForDeadlock()
-
 	timeStart := time.Now().Truncate(time.Minute)
 
 	fmt.Println("Время старта : ", timeStart)
@@ -91,6 +89,7 @@ func (app *Application) Run() error {
 				app.SetTrigerTrade(name, true)
 				timer := time.NewTimer(5 * time.Second)
 				<-timer.C
+				fmt.Println("Сработал таймер записи периода:", name)
 				app.SetTrigerTrade(name, false)
 				app.UpdateCandlesTriger(periodByName(name))
 			}
@@ -116,6 +115,7 @@ func (app *Application) onTrade(trade model.Trade) {
 		if difTime >= time.Duration(period.Duration) {
 			// Запускаем таймер для полной записи всех пар
 			if !app.trigerTrade[period.Name].active {
+				fmt.Println("Ща отправим сигнал на запись ", period.Name)
 				app.trigerTrade[period.Name].signal <- true
 			}
 			app.WriteTrade(candle, period)
@@ -165,12 +165,7 @@ func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 	candle.Time = candle.Time.Add(period.Duration)
 	candle.CompleteTrade = true
 
-	// TODO что это
-	// if candle.Volume != 0 {
-
 	candle.StartT = false
-
-	//app.WriteTradeDatabase(*candle, period)
 
 	app.WriteCandleBuffer(*candle, period)
 
@@ -186,7 +181,6 @@ func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 	candle.ActiveBuyVolume = 0
 	candle.ActiveBuyQuoteVolume = 0
 
-	//}
 }
 
 func (app *Application) WriteTradeDatabase(period model.Periods) {
@@ -194,7 +188,7 @@ func (app *Application) WriteTradeDatabase(period model.Periods) {
 	go func() {
 		start := time.Now()
 
-		err := database.InsertCandlesTableNameV2(app.database, period.Name, app.candlesBuffer[period.Name])
+		err := database.InsertCandlesTableNameV3(app.database, period.Name, app.candlesBuffer[period.Name])
 		if err != nil {
 			log.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
 		}
@@ -202,7 +196,7 @@ func (app *Application) WriteTradeDatabase(period model.Periods) {
 		app.candlesBuffer[period.Name] = []model.Candle{}
 
 		duration := time.Since(start)
-		log.MyLogger.InfoLog.Printf("t:%v ", duration)
+		log.MyLogger.InfoLog.Printf("t:%v  period %s ", duration, period.Name)
 
 	}()
 }
@@ -225,15 +219,11 @@ func (app *Application) UpdateCandlesTriger(period model.Periods) {
 
 }
 
-// func (app *Application) GetTrigerTrade(period string) bool {
-// 	app.mtx.Lock()
-// 	defer app.mtx.Unlock()
-// 	return app.trigerTrade[period]
-// }
-
 func (app *Application) SetTrigerTrade(period string, value bool) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
+
+	fmt.Println("SetTrigerTrade:", period, value)
 	app.trigerTrade[period].active = value
 }
 
