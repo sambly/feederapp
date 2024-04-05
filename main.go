@@ -34,6 +34,7 @@ func main() {
 		{Name: "ch15m", Duration: time.Minute * 15},
 		{Name: "ch1h", Duration: time.Hour},
 		{Name: "ch4h", Duration: time.Hour * 4},
+		{Name: "ch12h", Duration: time.Hour * 12},
 	}
 
 	db, err := database.DbConnection()

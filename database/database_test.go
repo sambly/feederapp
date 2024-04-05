@@ -11,6 +11,7 @@ import (
 )
 
 // Проверка разности времени между двумя candle. Есть ли пропуске во времени
+// TODO сделать также проверку не записан ли candle два раза
 func TestSelectCandlesTable(t *testing.T) {
 
 	db, err := DbConnection()
@@ -40,9 +41,9 @@ func TestDataCandle(t *testing.T) {
 	// НЕОБХОДИМЫЕ ДАННЫЕ
 	tableName := "ch1m"
 
-	pair := "ILVUSDT"
+	pair := "FLOKIUSDT"
 	period := "1m"
-	limit := 10
+	limit := 500
 
 	ctx := context.Background()
 	binance, err := exchange.NewBinance(ctx)

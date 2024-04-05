@@ -35,6 +35,6 @@ func InitLogger() {
 
 func (l *Loggerr) ErrorOut(err error) {
 	trace := fmt.Sprintf("%s\n%s", err.Error(), debug.Stack())
-	log.Println(err.Error())
+	// log.Println(err.Error())
 	l.ErrorLog.Output(2, trace)
 }

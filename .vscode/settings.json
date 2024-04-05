@@ -1,3 +1,5 @@
 {    
-    "go.testFlags": ["-count=1"]
+    "go.testFlags": ["-count=1"],
+    "terminal.integrated.scrollback": 100000
+
 }

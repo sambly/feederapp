@@ -23,34 +23,7 @@ type Application struct {
 	periods       []model.Periods
 	candles       map[string]map[string]*model.Candle
 	candlesBuffer map[string][]model.Candle
-	trigers       *trigersTrade
-}
-
-type trigersTrade struct {
-	mtx         sync.Mutex
-	trigerTrade map[string]*trigerTrade
-}
-
-type trigerTrade struct {
-	signal chan bool
-	active bool
-}
-
-func (trig *trigersTrade) SetTrigerTrade(period string, value bool) {
-	trig.mtx.Lock()
-	defer trig.mtx.Unlock()
-
-	fmt.Println("SetTrigerTrade:", period, value)
-	trig.trigerTrade[period].active = value
-}
-
-func (trig *trigersTrade) GetTrigerTrade(period string) {
-	trig.mtx.Lock()
-	defer trig.mtx.Unlock()
-
-	if !trig.trigerTrade[period].active {
-		trig.trigerTrade[period].signal <- true
-	}
+	trigerTimer   map[string]bool
 }
 
 func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string, periods []model.Periods) (*Application, error) {
@@ -64,7 +37,7 @@ func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string,
 		periods:       periods,
 		candles:       make(map[string]map[string]*model.Candle),
 		candlesBuffer: make(map[string][]model.Candle),
-		trigers:       &trigersTrade{trigerTrade: map[string]*trigerTrade{}},
+		trigerTimer:   make(map[string]bool),
 	}
 	return app, nil
 }
@@ -72,6 +45,8 @@ func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string,
 func (app *Application) Run() error {
 
 	timeStart := time.Now().Truncate(time.Minute)
+
+	//go checkForDeadlock()
 
 	fmt.Println("Время старта : ", timeStart)
 
@@ -86,41 +61,31 @@ func (app *Application) Run() error {
 			app.candles[pair] = map[string]*model.Candle{}
 		}
 		for _, period := range app.periods {
-			nextTime := findNextMultipleTimeV2(timeStart, period.Duration)
+			nextTime := findNextMultipleTime(timeStart, period.Duration)
 			app.candles[pair][period.Name] = &model.Candle{Pair: pair, Time: nextTime}
 		}
 	}
 
 	for _, period := range app.periods {
 		app.candlesBuffer[period.Name] = []model.Candle{}
-		app.trigers.trigerTrade[period.Name] = &trigerTrade{signal: make(chan bool), active: false}
-	}
-
-	periodByName := func(name string) model.Periods {
-		for _, period := range app.periods {
-			if period.Name == name {
-				return period
-			}
-		}
-		return model.Periods{}
-	}
-
-	for name, triger := range app.trigers.trigerTrade {
-		go func(name string, triger *trigerTrade) {
-			for range triger.signal {
-				app.trigers.SetTrigerTrade(name, true)
-				timer := time.NewTimer(5 * time.Second)
-				<-timer.C
-				fmt.Println("Сработал таймер записи периода:", name)
-				app.trigers.SetTrigerTrade(name, false)
-				app.UpdateCandlesTriger(periodByName(name))
-			}
-		}(name, triger)
+		app.trigerTimer[period.Name] = false
 	}
 
 	app.dataFeed.Start(true)
 
 	return nil
+}
+
+func (app *Application) onTimer(period model.Periods) {
+
+	app.trigerTimer[period.Name] = true
+	//app.SetTrigerTimer(period, true)
+	go func(period model.Periods) {
+		timer := time.NewTimer(5 * time.Second)
+		<-timer.C
+		app.SetTrigerTimer(period, false)
+		app.UpdateCandlesTriger(period)
+	}(period)
 }
 
 func (app *Application) onTrade(trade model.Trade) {
@@ -136,7 +101,9 @@ func (app *Application) onTrade(trade model.Trade) {
 
 		if difTime >= time.Duration(period.Duration) {
 			// Запускаем таймер для полной записи всех пар
-			app.trigers.GetTrigerTrade(period.Name)
+			if !app.trigerTimer[period.Name] {
+				app.onTimer(period)
+			}
 			app.WriteTrade(candle, period)
 			difTime = trade.Time.Sub(candle.Time)
 
@@ -202,24 +169,6 @@ func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 
 }
 
-func (app *Application) WriteTradeDatabase(period model.Periods) {
-
-	go func() {
-		start := time.Now()
-
-		err := database.InsertCandlesTableNameV3(app.database, period.Name, app.candlesBuffer[period.Name])
-		if err != nil {
-			log.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
-		}
-
-		app.candlesBuffer[period.Name] = []model.Candle{}
-
-		duration := time.Since(start)
-		log.MyLogger.InfoLog.Printf("t:%v  period %s ", duration, period.Name)
-
-	}()
-}
-
 func (app *Application) UpdateCandlesTriger(period model.Periods) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
@@ -238,24 +187,28 @@ func (app *Application) UpdateCandlesTriger(period model.Periods) {
 
 }
 
-// Поиск близжайшего времени большего времени кратное заданному интервалу
-func findNextMultipleTime(t time.Time, interval time.Duration) time.Time {
-	for {
-		// TODO здесь может сделать увеличение на 1 минуту
-		t = t.Add(1 * time.Second) // Увеличиваем на 1 секунду для предотвращения зацикливания на текущем времени
-		if t.Unix()%int64(interval.Seconds()) == 0 {
-			break
+func (app *Application) WriteTradeDatabase(period model.Periods) {
+
+	candles := app.candlesBuffer[period.Name]
+	go func() {
+		start := time.Now()
+		err := database.InsertCandlesTableNameV3(app.database, period.Name, candles)
+		if err != nil {
+			log.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
 		}
-	}
-	return t
+		duration := time.Since(start)
+		log.MyLogger.InfoLog.Printf("t:%v  period %s ", duration, period.Name)
+	}()
+	app.candlesBuffer[period.Name] = []model.Candle{}
 }
 
-// Проверка на кратность времени
-func isTimeMultipleOfInterval(t time.Time, interval time.Duration) bool {
-	startTime := time.Unix(0, 0) // Начальное время (начало Unix эпохи)
-	return t.Sub(startTime)%interval == 0
+func (app *Application) SetTrigerTimer(period model.Periods, value bool) {
+	app.mtx.Lock()
+	defer app.mtx.Unlock()
+	app.trigerTimer[period.Name] = value
 }
-func findNextMultipleTimeV2(t time.Time, interval time.Duration) time.Time {
+
+func findNextMultipleTime(t time.Time, interval time.Duration) time.Time {
 	// Находим ближайшее время, которое кратно интервалу, начиная с t
 	remainder := t.Unix() % int64(interval.Seconds())
 	if remainder != 0 {
@@ -270,7 +223,7 @@ func findNextMultipleTimeV2(t time.Time, interval time.Duration) time.Time {
 
 func checkForDeadlock() {
 	for {
-		time.Sleep(5 * time.Second) // Проверка каждые 5 секунд
+		time.Sleep(20 * time.Second) // Проверка каждые 5 секунд
 		goroutineCount := runtime.NumGoroutine()
 		fmt.Println("Number of goroutines:", goroutineCount)
 	}

@@ -27,7 +27,7 @@ func DbConnection() (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error %s when opening DB", err)
 	}
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
 	res, err := db.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS "+dbname)
 	if err != nil {
@@ -48,7 +48,7 @@ func DbConnection() (*sql.DB, error) {
 	db.SetMaxIdleConns(20)
 	db.SetConnMaxLifetime(time.Minute * 5)
 
-	ctx, cancelfunc = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelfunc = context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
 	err = db.PingContext(ctx)
 	if err != nil {
@@ -76,7 +76,7 @@ func CreateCandlesTable(db *sql.DB) error {
 		ActiveBuyQuoteVolume DOUBLE
 		)`
 
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
 	res, err := db.ExecContext(ctx, query)
 	if err != nil {
@@ -106,7 +106,7 @@ func CreateTableName(db *sql.DB, tableName string) error {
         ActiveBuyQuoteVolume DOUBLE
     )`, "candles"+tableName)
 
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
 	res, err := db.ExecContext(ctx, query)
 	if err != nil {
@@ -122,7 +122,7 @@ func CreateTableName(db *sql.DB, tableName string) error {
 func InsertCandlesTable(db *sql.DB, candle model.Candle) error {
 
 	query := "INSERT INTO candles (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
 	stmtLicense, err := db.PrepareContext(ctx, query)
 	if err != nil {
@@ -158,7 +158,7 @@ func InsertCandlesTable(db *sql.DB, candle model.Candle) error {
 
 func InsertCandlesTableName(db *sql.DB, tableName string, candle model.Candle) error {
 	query := fmt.Sprintf("INSERT INTO %s (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", "candles"+tableName)
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
 	stmtLicense, err := db.PrepareContext(ctx, query)
 	if err != nil {
@@ -198,7 +198,7 @@ func InsertCandlesTableNameV2(db *sql.DB, tableName string, candles []model.Cand
 	}
 
 	query := fmt.Sprintf("INSERT INTO %s (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", "candles"+tableName)
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
 
 	stmtLicense, err := db.PrepareContext(ctx, query)
@@ -242,7 +242,7 @@ func InsertCandlesTableNameV3(db *sql.DB, tableName string, candles []model.Cand
 	}
 
 	query := fmt.Sprintf("INSERT INTO %s (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", "candles"+tableName)
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
 
 	// Начинаем транзакцию
