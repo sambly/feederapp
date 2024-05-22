@@ -3,7 +3,7 @@ package exchange
 import (
 	"context"
 	"fmt"
-	"main/log"
+	"main/logging"
 	"main/model"
 	"main/service"
 	"sync"
@@ -72,7 +72,7 @@ func (d *DataFeedSubscription) Start(loadSync bool) {
 					}
 				case err := <-feed.ErrTrade:
 					if err != nil {
-						log.MyLogger.ErrorOut(fmt.Errorf("error ws trade: %v", err))
+						logging.MyLogger.ErrorOut(fmt.Errorf("error ws trade: %v", err))
 					}
 				}
 			}

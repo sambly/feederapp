@@ -7,7 +7,7 @@ import (
 
 	"main/database"
 	"main/exchange"
-	mylog "main/log"
+	mylog "main/logging"
 	"main/model"
 	"net/http"
 	_ "net/http/pprof"

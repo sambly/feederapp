@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  feeder_app:
+    build: .
+    volumes:
+      - ${PWD}/log:/data/log
+    environment:
+      - LOG_DIR=/data/log

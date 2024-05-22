@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"main/database"
 	"main/exchange"
-	"main/log"
+	"main/logging"
 	"main/model"
 	"main/service"
 	"runtime"
@@ -194,10 +194,10 @@ func (app *Application) WriteTradeDatabase(period model.Periods) {
 		start := time.Now()
 		err := database.InsertCandlesTableNameV3(app.database, period.Name, candles)
 		if err != nil {
-			log.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
+			logging.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
 		}
 		duration := time.Since(start)
-		log.MyLogger.InfoLog.Printf("t:%v  period %s ", duration, period.Name)
+		logging.MyLogger.InfoLog.Printf("t:%v  period %s ", duration, period.Name)
 	}()
 	app.candlesBuffer[period.Name] = []model.Candle{}
 }
