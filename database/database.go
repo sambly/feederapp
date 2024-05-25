@@ -10,24 +10,18 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-const (
-	username = "root"
-	password = "q1w2e3"
-	hostname = "127.0.0.1:3306"
-	dbname   = "datafeeder"
-)
-
-func dsn(dbName string) string {
-	loc := `loc=Europe%2FMoscow`
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&%s", username, password, hostname, dbName, loc)
+func dsn(dbname, hostname, port, username, password string) string {
+	//loc := `loc=Europe%2FMoscow`
+	loc := `&loc=Local`
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&%s", username, password, hostname, port, dbname, loc)
 }
 
-func DbConnection() (*sql.DB, error) {
-	db, err := sql.Open("mysql", dsn(""))
+func DbConnection(dbname, hostname, port, username, password string) (*sql.DB, error) {
+	db, err := sql.Open("mysql", dsn(dbname, hostname, port, username, password))
 	if err != nil {
 		return nil, fmt.Errorf("error %s when opening DB", err)
 	}
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelfunc()
 	res, err := db.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS "+dbname)
 	if err != nil {
@@ -39,7 +33,7 @@ func DbConnection() (*sql.DB, error) {
 	}
 	db.Close()
 
-	db, err = sql.Open("mysql", dsn(dbname))
+	db, err = sql.Open("mysql", dsn(dbname, hostname, port, username, password))
 	if err != nil {
 		return nil, fmt.Errorf("error %s when opening DB", err)
 	}
@@ -48,7 +42,7 @@ func DbConnection() (*sql.DB, error) {
 	db.SetMaxIdleConns(20)
 	db.SetConnMaxLifetime(time.Minute * 5)
 
-	ctx, cancelfunc = context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancelfunc = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelfunc()
 	err = db.PingContext(ctx)
 	if err != nil {
@@ -57,7 +51,6 @@ func DbConnection() (*sql.DB, error) {
 
 	return db, nil
 }
-
 func CreateCandlesTable(db *sql.DB) error {
 
 	query := `CREATE TABLE IF NOT EXISTS candles(

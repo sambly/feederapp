@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"main/config"
 	"main/exchange"
 	"main/model"
 	"testing"
@@ -14,10 +15,16 @@ import (
 // TODO сделать также проверку не записан ли candle два раза
 func TestSelectCandlesTable(t *testing.T) {
 
-	db, err := DbConnection()
+	config, err := config.NewConfig()
 	if err != nil {
 		t.Error(err)
 	}
+
+	db, err := DbConnection(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
+	if err != nil {
+		t.Error(err)
+	}
+
 	defer db.Close()
 
 	candles, err := SelectCandles(db, "ILVUSDT")
@@ -51,7 +58,12 @@ func TestDataCandle(t *testing.T) {
 		t.Error(err)
 	}
 
-	db, err := DbConnection()
+	config, err := config.NewConfig()
+	if err != nil {
+		t.Error(err)
+	}
+
+	db, err := DbConnection(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
 	if err != nil {
 		t.Error(err)
 	}

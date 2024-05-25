@@ -29,7 +29,7 @@ func InitLogger() {
 	// }
 	// //defer errorLogFile.Close()
 
-	logDir := "/data/log"
+	logDir := "/log"
 	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
 		log.Fatalf("Failed to create log directory: %v", err)
 	}

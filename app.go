@@ -46,8 +46,6 @@ func (app *Application) Run() error {
 
 	timeStart := time.Now().Truncate(time.Minute)
 
-	//go checkForDeadlock()
-
 	fmt.Println("Время старта : ", timeStart)
 
 	// Для правильного расчета

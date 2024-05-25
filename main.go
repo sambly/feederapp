@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"main/config"
 	"main/database"
 	"main/exchange"
 	mylog "main/logging"
@@ -18,6 +19,11 @@ func main() {
 	ctx := context.Background()
 
 	mylog.InitLogger()
+
+	config, err := config.NewConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	binance, err := exchange.NewBinance(ctx)
 	if err != nil {
@@ -37,7 +43,7 @@ func main() {
 		{Name: "ch12h", Duration: time.Hour * 12},
 	}
 
-	db, err := database.DbConnection()
+	db, err := database.DbConnection(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
 	if err != nil {
 		log.Fatal(err)
 	}

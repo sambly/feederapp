@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/adshao/go-binance/v2 v2.4.5
 	github.com/go-sql-driver/mysql v1.7.1
+	github.com/joho/godotenv v1.5.1
 	github.com/jpillora/backoff v1.0.0
 )
 
