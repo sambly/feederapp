@@ -46,7 +46,7 @@ func (app *Application) Run() error {
 
 	timeStart := time.Now().Truncate(time.Minute)
 
-	fmt.Println("Время старта : ", timeStart)
+	logging.MyLogger.InfoLog.Println("Время старта : ", timeStart)
 
 	// Для правильного расчета
 	timeStart = timeStart.Add(time.Minute)
