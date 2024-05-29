@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"main/config"
@@ -12,11 +16,14 @@ import (
 	"main/model"
 	"net/http"
 	_ "net/http/pprof"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	mylog.InitLogger()
 
@@ -63,7 +70,33 @@ func main() {
 		log.Fatal(err)
 	}
 
-	go http.ListenAndServe(":8080", nil)
+	srv := &http.Server{Addr: ":8080"}
+
+	// Создание группы горутин с контекстом
+	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		fmt.Println("Запуск HTTP-сервера на порту 8080")
+		// Запуск HTTP-сервера
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return err
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		<-gCtx.Done()
+		// Завершение работы сервиса
+		ctxShutdown, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelShutdown()
+		if err := srv.Shutdown(ctxShutdown); err != nil {
+			log.Printf("Ошибка при завершении работы HTTP-сервера: %v", err)
+		} else {
+			log.Println("HTTP-сервер завершен корректно")
+		}
+
+		return err
+	})
 
 	app.Run()
 }

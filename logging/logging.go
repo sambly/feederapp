@@ -17,18 +17,6 @@ var MyLogger = &Loggerr{}
 
 func InitLogger() {
 
-	// infoLogFile, err := os.OpenFile("/data/log/info.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// //defer infoLogFile.Close()
-
-	// errorLogFile, err := os.OpenFile("/data/log/error.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// //defer errorLogFile.Close()
-
 	logDir := "./log"
 	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
 		log.Fatalf("Failed to create log directory: %v", err)

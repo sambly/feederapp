@@ -7,6 +7,7 @@ require (
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/joho/godotenv v1.5.1
 	github.com/jpillora/backoff v1.0.0
+	golang.org/x/sync v0.7.0
 )
 
 require (
