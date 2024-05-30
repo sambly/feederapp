@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"main/database"
@@ -8,7 +9,6 @@ import (
 	"main/logging"
 	"main/model"
 	"main/service"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -42,18 +42,12 @@ func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string,
 	return app, nil
 }
 
-func (app *Application) Run() error {
-
+func (app *Application) Run(ctx context.Context) error {
 	timeStart := time.Now().Truncate(time.Minute)
-
-	logging.MyLogger.InfoLog.Println("Время старта : ", timeStart)
-
-	// Для правильного расчета
 	timeStart = timeStart.Add(time.Minute)
 
 	for _, pair := range app.pairs {
-
-		app.dataFeed.SubscribeTrade(pair, app.onTrade)
+		app.dataFeed.SubscribeTrade(ctx, pair, app.onTrade)
 
 		if _, ok := app.candles[pair]; !ok {
 			app.candles[pair] = map[string]*model.Candle{}
@@ -69,7 +63,11 @@ func (app *Application) Run() error {
 		app.trigerTimer[period.Name] = false
 	}
 
-	app.dataFeed.Start(true)
+	go app.dataFeed.Start(ctx, true)
+
+	<-ctx.Done()
+
+	logging.MyLogger.InfoLog.Println("Приложение завершено")
 
 	return nil
 }
@@ -77,7 +75,7 @@ func (app *Application) Run() error {
 func (app *Application) onTimer(period model.Periods) {
 
 	app.trigerTimer[period.Name] = true
-	//app.SetTrigerTimer(period, true)
+
 	go func(period model.Periods) {
 		timer := time.NewTimer(5 * time.Second)
 		<-timer.C
@@ -217,12 +215,4 @@ func findNextMultipleTime(t time.Time, interval time.Duration) time.Time {
 	}
 	t = t.Add(interval)
 	return t
-}
-
-func checkForDeadlock() {
-	for {
-		time.Sleep(20 * time.Second) // Проверка каждые 5 секунд
-		goroutineCount := runtime.NumGoroutine()
-		fmt.Println("Number of goroutines:", goroutineCount)
-	}
 }

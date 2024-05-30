@@ -11,7 +11,6 @@ import (
 )
 
 func dsn(dbname, hostname, port, username, password string) string {
-	//loc := `loc=Europe%2FMoscow`
 	loc := `&loc=Local`
 	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&%s", username, password, hostname, port, dbname, loc)
 }
@@ -51,8 +50,27 @@ func DbConnection(dbname, hostname, port, username, password string) (*sql.DB, e
 
 	return db, nil
 }
-func CreateCandlesTable(db *sql.DB) error {
 
+func GracefulShutdown(db *sql.DB, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// Здесь вы можете закрыть все соединения, транзакции и т.д.
+	if err := db.Close(); err != nil {
+		return fmt.Errorf("error %s when closing DB", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		if ctx.Err() != context.Canceled {
+			return fmt.Errorf("context canceled during graceful shutdown")
+		}
+	}
+
+	return nil
+}
+
+func CreateCandlesTable(db *sql.DB) error {
 	query := `CREATE TABLE IF NOT EXISTS candles(
 		Id int primary key auto_increment,
 		Time datetime,
@@ -113,7 +131,6 @@ func CreateTableName(db *sql.DB, tableName string) error {
 }
 
 func InsertCandlesTable(db *sql.DB, candle model.Candle) error {
-
 	query := "INSERT INTO candles (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
@@ -314,7 +331,6 @@ func SelectCandles(db *sql.DB, pair string) ([]model.Candle, error) {
 }
 
 func SelectCandle(db *sql.DB, tableName, pair string, timeRounding time.Time) (model.Candle, error) {
-
 	candle := model.Candle{}
 
 	query := fmt.Sprintf("select Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume from %s WHERE Pair = ? and Time = ?;", "candles"+tableName)

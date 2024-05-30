@@ -38,12 +38,11 @@ func NewDataFeed(exchange service.Exchange, timeframe string) *DataFeedSubscript
 	return data
 }
 
-func (d *DataFeedSubscription) SubscribeTrade(pair string, consumer TradeFeedConsumer) {
-
+func (d *DataFeedSubscription) SubscribeTrade(ctx context.Context, pair string, consumer TradeFeedConsumer) {
 	if _, ok := d.DataFeeds[pair]; !ok {
 		d.DataFeeds[pair] = &DataFeed{}
 	}
-	ctrade, cerrt := d.exchange.TradesSubscription(context.Background(), pair)
+	ctrade, cerrt := d.exchange.TradesSubscription(ctx, pair)
 	d.DataFeeds[pair].DataTrade = ctrade
 	d.DataFeeds[pair].ErrTrade = cerrt
 
@@ -52,19 +51,20 @@ func (d *DataFeedSubscription) SubscribeTrade(pair string, consumer TradeFeedCon
 	})
 }
 
-func (d *DataFeedSubscription) Start(loadSync bool) {
-
+func (d *DataFeedSubscription) Start(ctx context.Context, loadSync bool) {
 	wg := new(sync.WaitGroup)
 
 	for key, feed := range d.DataFeeds {
 		wg.Add(1)
 		go func(key string, feed *DataFeed) {
+			defer wg.Done()
 			for {
 				select {
-
+				case <-ctx.Done():
+					return
 				case trade, ok := <-feed.DataTrade:
 					if !ok {
-						wg.Done()
+						logging.MyLogger.InfoLog.Println("stopping data feed:", key)
 						return
 					}
 					for _, subscription := range feed.SubscriptionsByTrade {

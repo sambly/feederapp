@@ -6,13 +6,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"main/config"
 	"main/database"
 	"main/exchange"
-	mylog "main/logging"
+	"main/logging"
 	"main/model"
 	"net/http"
 	_ "net/http/pprof"
@@ -25,22 +26,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	mylog.InitLogger()
+	logging.InitLogger()
+
+	logging.MyLogger.InfoLog.Println("Запуск приложения")
 
 	config, err := config.NewConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	binance, err := exchange.NewBinance(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-	pairs, err := binance.GetPairsToUSDT()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	periods := []model.Periods{
 		{Name: "ch1m", Duration: time.Second * 60},
 		{Name: "ch3m", Duration: time.Minute * 3},
@@ -49,6 +42,17 @@ func main() {
 		{Name: "ch4h", Duration: time.Hour * 4},
 		{Name: "ch12h", Duration: time.Hour * 12},
 	}
+	wg := &sync.WaitGroup{}
+	binance, err := exchange.NewBinance(ctx, wg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	pairs, err := binance.GetPairsToUSDT()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	logging.MyLogger.InfoLog.Println("Колличество пар : ", len(pairs))
 
 	db, err := database.DbConnection(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
 	if err != nil {
@@ -63,9 +67,7 @@ func main() {
 		}
 	}
 
-	timeframe := "1m"
-
-	app, err := NewApp(binance, db, timeframe, pairs, periods)
+	app, err := NewApp(binance, db, "1m", pairs, periods)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -76,27 +78,47 @@ func main() {
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		fmt.Println("Запуск HTTP-сервера на порту 8080")
-		// Запуск HTTP-сервера
+		logging.MyLogger.InfoLog.Println("Запуск HTTP-сервера на порту 8080")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return err
 		}
 		return nil
 	})
 
+	// Завершение работы сервиса
 	g.Go(func() error {
+
 		<-gCtx.Done()
-		// Завершение работы сервиса
+
 		ctxShutdown, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancelShutdown()
 		if err := srv.Shutdown(ctxShutdown); err != nil {
-			log.Printf("Ошибка при завершении работы HTTP-сервера: %v", err)
-		} else {
-			log.Println("HTTP-сервер завершен корректно")
+			logging.MyLogger.ErrorOut(fmt.Errorf("ошибка при завершении работы HTTP-сервера: %v", err))
 		}
+		logging.MyLogger.InfoLog.Println("HTTP-сервер остановлен")
 
-		return err
+		// Вызов GracefulShutdown для корректного завершения работы с базой данных
+		if err := database.GracefulShutdown(db, 10*time.Second); err != nil {
+			logging.MyLogger.ErrorOut(fmt.Errorf("ошибка при завершении работы с базой данных: %v", err))
+		}
+		logging.MyLogger.InfoLog.Println("Соединение с базой данных закрыто")
+
+		return gCtx.Err()
 	})
 
-	app.Run()
+	// Горутина запуска приложения
+	g.Go(func() error {
+		// Убедитесь, что приложение поддерживает отмену через контекст
+		return app.Run(gCtx)
+	})
+
+	// Ожидание завершения всех горутин
+	if err := g.Wait(); err != nil {
+		log.Fatalf("Ошибка: %v", err)
+	}
+
+	// Ожидание завершения всех подписок
+	wg.Wait()
+	logging.MyLogger.InfoLog.Println("Все подписки завершены")
+
 }
