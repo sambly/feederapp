@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -42,8 +41,8 @@ func main() {
 		{Name: "ch4h", Duration: time.Hour * 4},
 		{Name: "ch12h", Duration: time.Hour * 12},
 	}
-	wg := &sync.WaitGroup{}
-	binance, err := exchange.NewBinance(ctx, wg)
+
+	binance, err := exchange.NewBinance(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,28 +96,22 @@ func main() {
 		}
 		logging.MyLogger.InfoLog.Println("HTTP-сервер остановлен")
 
-		// Вызов GracefulShutdown для корректного завершения работы с базой данных
-		if err := database.GracefulShutdown(db, 10*time.Second); err != nil {
-			logging.MyLogger.ErrorOut(fmt.Errorf("ошибка при завершении работы с базой данных: %v", err))
-		}
-		logging.MyLogger.InfoLog.Println("Соединение с базой данных закрыто")
+		// // Вызов GracefulShutdown для корректного завершения работы с базой данных
+		// if err := database.GracefulShutdown(db, ctxShutdown); err != nil {
+		// 	logging.MyLogger.ErrorOut(fmt.Errorf("ошибка при завершении работы с базой данных: %v", err))
+		// }
+		// logging.MyLogger.InfoLog.Println("Соединение с базой данных закрыто")
 
 		return gCtx.Err()
 	})
 
-	// Горутина запуска приложения
 	g.Go(func() error {
-		// Убедитесь, что приложение поддерживает отмену через контекст
 		return app.Run(gCtx)
 	})
 
-	// Ожидание завершения всех горутин
-	if err := g.Wait(); err != nil {
-		log.Fatalf("Ошибка: %v", err)
+	if err := g.Wait(); err != nil && gCtx.Err() != context.Canceled {
+		log.Fatalf("Приложение завершено с ошибкой: %v", err)
+	} else {
+		logging.MyLogger.InfoLog.Println("Приложение завершено")
 	}
-
-	// Ожидание завершения всех подписок
-	wg.Wait()
-	logging.MyLogger.InfoLog.Println("Все подписки завершены")
-
 }

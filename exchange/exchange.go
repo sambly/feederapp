@@ -16,6 +16,7 @@ type DataFeed struct {
 }
 
 type DataFeedSubscription struct {
+	wg        *sync.WaitGroup
 	timeframe string
 	exchange  service.Exchange
 	DataFeeds map[string]*DataFeed
@@ -30,6 +31,7 @@ type TradeFeedConsumer func(model.Trade)
 func NewDataFeed(exchange service.Exchange, timeframe string) *DataFeedSubscription {
 
 	data := &DataFeedSubscription{
+		wg:        &sync.WaitGroup{},
 		timeframe: timeframe,
 		exchange:  exchange,
 		DataFeeds: make(map[string]*DataFeed),
@@ -39,10 +41,11 @@ func NewDataFeed(exchange service.Exchange, timeframe string) *DataFeedSubscript
 }
 
 func (d *DataFeedSubscription) SubscribeTrade(ctx context.Context, pair string, consumer TradeFeedConsumer) {
+	d.wg.Add(1)
 	if _, ok := d.DataFeeds[pair]; !ok {
 		d.DataFeeds[pair] = &DataFeed{}
 	}
-	ctrade, cerrt := d.exchange.TradesSubscription(ctx, pair)
+	ctrade, cerrt := d.exchange.TradesSubscription(ctx, pair, d.wg)
 	d.DataFeeds[pair].DataTrade = ctrade
 	d.DataFeeds[pair].ErrTrade = cerrt
 
@@ -51,7 +54,7 @@ func (d *DataFeedSubscription) SubscribeTrade(ctx context.Context, pair string, 
 	})
 }
 
-func (d *DataFeedSubscription) Start(ctx context.Context, loadSync bool) {
+func (d *DataFeedSubscription) Start(ctx context.Context) {
 	wg := new(sync.WaitGroup)
 
 	for key, feed := range d.DataFeeds {
@@ -78,7 +81,9 @@ func (d *DataFeedSubscription) Start(ctx context.Context, loadSync bool) {
 			}
 		}(key, feed)
 	}
-	if loadSync {
-		wg.Wait()
-	}
+
+	// Завершение подписок по websocket
+	d.wg.Wait()
+	wg.Wait()
+	logging.MyLogger.InfoLog.Println("Все подписки завершены")
 }

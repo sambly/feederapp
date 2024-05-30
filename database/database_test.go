@@ -7,7 +7,6 @@ import (
 	"main/config"
 	"main/exchange"
 	"main/model"
-	"sync"
 	"testing"
 	"time"
 )
@@ -54,8 +53,7 @@ func TestDataCandle(t *testing.T) {
 	limit := 500
 
 	ctx := context.Background()
-	wg := &sync.WaitGroup{}
-	binance, err := exchange.NewBinance(ctx, wg)
+	binance, err := exchange.NewBinance(ctx)
 	if err != nil {
 		t.Error(err)
 	}

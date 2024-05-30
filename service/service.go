@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"main/model"
+	"sync"
 	"time"
 )
 
@@ -16,5 +17,5 @@ type Feeder interface {
 	CandlesByPeriod(ctx context.Context, pair, period string, start, end time.Time) ([]model.Candle, error)
 	CandlesByLimit(ctx context.Context, pair, period string, limit int) ([]model.Candle, error)
 	CandlesSubscription(ctx context.Context, pair, timeframe string) (chan model.Candle, chan error)
-	TradesSubscription(ctx context.Context, pair string) (chan model.Trade, chan error)
+	TradesSubscription(ctx context.Context, pair string, wg *sync.WaitGroup) (chan model.Trade, chan error)
 }

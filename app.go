@@ -29,6 +29,7 @@ type Application struct {
 func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string, periods []model.Periods) (*Application, error) {
 
 	app := &Application{
+		mtx:      sync.Mutex{},
 		exchange: exch,
 		dataFeed: exchange.NewDataFeed(exch, timeframe),
 		database: db,
@@ -63,12 +64,9 @@ func (app *Application) Run(ctx context.Context) error {
 		app.trigerTimer[period.Name] = false
 	}
 
-	go app.dataFeed.Start(ctx, true)
+	go app.dataFeed.Start(ctx)
 
 	<-ctx.Done()
-
-	logging.MyLogger.InfoLog.Println("Приложение завершено")
-
 	return nil
 }
 

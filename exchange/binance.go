@@ -14,6 +14,7 @@ import (
 	"github.com/jpillora/backoff"
 )
 
+var Count int
 var (
 	ErrInvalidQuantity   = errors.New("invalid quantity")
 	ErrInsufficientFunds = errors.New("insufficient funds or locked")
@@ -33,8 +34,8 @@ func (o *OrderError) Error() string {
 type MetadataFetchers func(pair string, t time.Time) (string, float64)
 
 type Binance struct {
-	ctx        context.Context
-	wg         *sync.WaitGroup
+	ctx context.Context
+
 	client     *binance.Client
 	assetsInfo map[string]model.AssetInfo
 
@@ -63,9 +64,9 @@ func WithMetadataFetcher(fetcher MetadataFetchers) BinanceOption {
 }
 
 // NewBinance create a new Binance exchange instance
-func NewBinance(ctx context.Context, wg *sync.WaitGroup, options ...BinanceOption) (*Binance, error) {
+func NewBinance(ctx context.Context, options ...BinanceOption) (*Binance, error) {
 	binance.WebsocketKeepalive = true
-	exchange := &Binance{ctx: ctx, wg: wg}
+	exchange := &Binance{ctx: ctx}
 	for _, option := range options {
 		option(exchange)
 	}
@@ -164,23 +165,24 @@ func (b *Binance) CandlesSubscription(ctx context.Context, pair, period string) 
 				candle := CandleFromWsKline(pair, event.Kline)
 
 				select {
-				case ccandle <- candle:
 				case <-ctx.Done():
 					return
+				case ccandle <- candle:
 				}
 
 			}, func(err error) {
+
 				select {
-				case cerr <- err:
 				case <-ctx.Done():
 					return
+				case cerr <- err:
 				}
 			})
 			if err != nil {
 				select {
-				case cerr <- err:
 				case <-ctx.Done():
 					return
+				case cerr <- err:
 				}
 			}
 
@@ -196,14 +198,13 @@ func (b *Binance) CandlesSubscription(ctx context.Context, pair, period string) 
 	return ccandle, cerr
 }
 
-func (b *Binance) TradesSubscription(ctx context.Context, pair string) (chan model.Trade, chan error) {
+func (b *Binance) TradesSubscription(ctx context.Context, pair string, wg *sync.WaitGroup) (chan model.Trade, chan error) {
 	ctrade := make(chan model.Trade)
 	cerr := make(chan error)
-	b.wg.Add(1)
 	go func() {
-		defer b.wg.Done()
 		defer close(ctrade)
 		defer close(cerr)
+		defer wg.Done()
 		ba := &backoff.Backoff{
 			Min: 100 * time.Millisecond,
 			Max: 1 * time.Second,
@@ -220,31 +221,52 @@ func (b *Binance) TradesSubscription(ctx context.Context, pair string) (chan mod
 				trade.IsBuyerMaker = event.IsBuyerMaker
 
 				select {
-				case ctrade <- trade:
 				case <-ctx.Done():
 					return
+				default:
+					select {
+					case ctrade <- trade:
+					case <-ctx.Done():
+						return
+					}
 				}
 
 			}, func(err error) {
+
 				select {
-				case cerr <- err:
 				case <-ctx.Done():
 					return
+				default:
+					select {
+					case cerr <- err:
+					case <-ctx.Done():
+						return
+					}
 				}
 			})
 			if err != nil {
 				select {
-				case cerr <- err:
 				case <-ctx.Done():
 					return
+				default:
+					select {
+					case cerr <- err:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 
 			select {
 			case <-ctx.Done():
 				return
-			case <-done:
-				time.Sleep(ba.Duration())
+			default:
+				select {
+				case <-done:
+					time.Sleep(ba.Duration())
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()
