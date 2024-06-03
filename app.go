@@ -68,17 +68,13 @@ func (app *Application) Run(ctx context.Context) error {
 		app.trigerTimer[period.Name] = false
 	}
 
-	g, _ := errgroup.WithContext(ctx)
+	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
 		return app.dataFeed.Start(ctx)
 	})
 
-	if err := g.Wait(); err != nil {
-		return err
-	} else {
-		return nil
-	}
+	return g.Wait()
 
 }
 
@@ -88,12 +84,12 @@ func (app *Application) onTimer(ctx context.Context, period model.Periods) {
 
 	go func(ctx context.Context, period model.Periods) {
 		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
 		select {
 		case <-timer.C:
 			app.SetTrigerTimer(period, false)
 			app.UpdateCandlesTriger(ctx, period)
 		case <-ctx.Done():
-			timer.Stop()
 			return
 		}
 	}(ctx, period)
@@ -132,7 +128,7 @@ func (app *Application) onTrade(ctx context.Context, trade model.Trade) {
 				candle.StartT = true
 				candle.Open = trade.Price
 				candle.Low = trade.Price
-				candle.High = 0
+				candle.High = 0 //  todo candle.High = trade.Price
 			}
 
 			candle.Price = trade.Price
@@ -147,9 +143,9 @@ func (app *Application) onTrade(ctx context.Context, trade model.Trade) {
 			candle.Volume += trade.Quantity
 			candle.QuoteVolume += trade.Quantity * trade.Price
 
-			candle.AmountTrade += 1
+			candle.AmountTrade++
 			if !trade.IsBuyerMaker {
-				candle.AmountTradeBuy += 1
+				candle.AmountTradeBuy++
 				candle.ActiveBuyVolume += trade.Quantity
 				candle.ActiveBuyQuoteVolume += trade.Price * trade.Quantity
 			}
@@ -171,6 +167,9 @@ func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 	candle.StartT = false
 
 	app.WriteCandleBuffer(*candle, period)
+
+	// Reset candle fields
+	//*candle = model.Candle{Pair: candle.Pair, Time: candle.Time} // todo
 
 	candle.Price = 0
 	candle.Low = 0
@@ -239,6 +238,5 @@ func findNextMultipleTime(t time.Time, interval time.Duration) time.Time {
 		t = t.Add(time.Duration(seconds-remainder) * time.Second)
 		// Добавляем этот же период времени, так как нужно дождаться чтобы все данные успели сформироваться
 	}
-	t = t.Add(interval)
-	return t
+	return t.Add(interval)
 }
