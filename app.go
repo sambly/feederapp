@@ -204,18 +204,23 @@ func (app *Application) UpdateCandlesTriger(ctx context.Context, period model.Pe
 
 }
 
-func (app *Application) WriteTradeDatabase(period model.Periods) {
+func (app *Application) WriteTradeDatabase(ctx context.Context, period model.Periods) {
 
 	candles := app.candlesBuffer[period.Name]
-	go func() {
+	go func(ctx context.Context) {
 		start := time.Now()
-		err := database.InsertCandlesTableNameV3(app.database, period.Name, candles)
-		if err != nil {
-			logging.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			err := database.InsertCandlesTableNameV3(app.database, period.Name, candles)
+			if err != nil {
+				logging.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
+			}
+			duration := time.Since(start)
+			logging.MyLogger.InfoLog.Printf("t:%v  period %s ", duration, period.Name)
 		}
-		duration := time.Since(start)
-		logging.MyLogger.InfoLog.Printf("t:%v  period %s ", duration, period.Name)
-	}()
+	}(ctx)
 	app.candlesBuffer[period.Name] = []model.Candle{}
 }
 
