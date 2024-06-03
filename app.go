@@ -50,7 +50,9 @@ func (app *Application) Run(ctx context.Context) error {
 	timeStart = timeStart.Add(time.Minute)
 
 	for _, pair := range app.pairs {
-		app.dataFeed.SubscribeTrade(ctx, pair, app.onTrade)
+		app.dataFeed.SubscribeTrade(ctx, pair, func(trade model.Trade) {
+			app.onTrade(ctx, trade)
+		})
 
 		if _, ok := app.candles[pair]; !ok {
 			app.candles[pair] = map[string]*model.Candle{}
@@ -80,19 +82,30 @@ func (app *Application) Run(ctx context.Context) error {
 
 }
 
-func (app *Application) onTimer(period model.Periods) {
+func (app *Application) onTimer(ctx context.Context, period model.Periods) {
 
 	app.trigerTimer[period.Name] = true
 
-	go func(period model.Periods) {
+	go func(ctx context.Context, period model.Periods) {
 		timer := time.NewTimer(5 * time.Second)
-		<-timer.C
-		app.SetTrigerTimer(period, false)
-		app.UpdateCandlesTriger(period)
-	}(period)
+		select {
+		case <-timer.C:
+			app.SetTrigerTimer(period, false)
+			app.UpdateCandlesTriger(ctx, period)
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+	}(ctx, period)
 }
 
-func (app *Application) onTrade(trade model.Trade) {
+func (app *Application) onTrade(ctx context.Context, trade model.Trade) {
+
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
 
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
@@ -106,7 +119,7 @@ func (app *Application) onTrade(trade model.Trade) {
 		if difTime >= time.Duration(period.Duration) {
 			// Запускаем таймер для полной записи всех пар
 			if !app.trigerTimer[period.Name] {
-				app.onTimer(period)
+				app.onTimer(ctx, period)
 			}
 			app.WriteTrade(candle, period)
 			difTime = trade.Time.Sub(candle.Time)
@@ -173,7 +186,7 @@ func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 
 }
 
-func (app *Application) UpdateCandlesTriger(period model.Periods) {
+func (app *Application) UpdateCandlesTriger(ctx context.Context, period model.Periods) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
@@ -187,7 +200,7 @@ func (app *Application) UpdateCandlesTriger(period model.Periods) {
 	}
 
 	// Запись в базу данных
-	app.WriteTradeDatabase(period)
+	app.WriteTradeDatabase(ctx, period)
 
 }
 
