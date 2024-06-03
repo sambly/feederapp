@@ -201,6 +201,7 @@ func (b *Binance) CandlesSubscription(ctx context.Context, pair, period string) 
 func (b *Binance) TradesSubscription(ctx context.Context, pair string, wg *sync.WaitGroup) (chan model.Trade, chan error) {
 	ctrade := make(chan model.Trade)
 	cerr := make(chan error)
+
 	go func() {
 		defer close(ctrade)
 		defer close(cerr)

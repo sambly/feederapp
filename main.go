@@ -6,12 +6,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"main/config"
 	"main/database"
 	"main/exchange"
+	"main/gorutune"
 	"main/logging"
 	"main/model"
 	"net/http"
@@ -22,11 +24,7 @@ import (
 
 func main() {
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	logging.InitLogger()
-
 	logging.MyLogger.InfoLog.Println("Запуск приложения")
 
 	config, err := config.NewConfig()
@@ -41,6 +39,9 @@ func main() {
 		{Name: "ch4h", Duration: time.Hour * 4},
 		{Name: "ch12h", Duration: time.Hour * 12},
 	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	binance, err := exchange.NewBinance(ctx)
 	if err != nil {
@@ -73,7 +74,6 @@ func main() {
 
 	srv := &http.Server{Addr: ":8080"}
 
-	// Создание группы горутин с контекстом
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
@@ -84,34 +84,53 @@ func main() {
 		return nil
 	})
 
+	g.Go(func() error {
+		return app.Run(gCtx)
+	})
+
 	// Завершение работы сервиса
 	g.Go(func() error {
 
 		<-gCtx.Done()
 
-		ctxShutdown, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+		logging.MyLogger.InfoLog.Println("Завершение приложения")
+
+		ctxShutdown, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancelShutdown()
 		if err := srv.Shutdown(ctxShutdown); err != nil {
 			logging.MyLogger.ErrorOut(fmt.Errorf("ошибка при завершении работы HTTP-сервера: %v", err))
 		}
 		logging.MyLogger.InfoLog.Println("HTTP-сервер остановлен")
-
-		// // Вызов GracefulShutdown для корректного завершения работы с базой данных
-		// if err := database.GracefulShutdown(db, ctxShutdown); err != nil {
-		// 	logging.MyLogger.ErrorOut(fmt.Errorf("ошибка при завершении работы с базой данных: %v", err))
-		// }
-		// logging.MyLogger.InfoLog.Println("Соединение с базой данных закрыто")
-
 		return gCtx.Err()
 	})
 
-	g.Go(func() error {
-		return app.Run(gCtx)
-	})
+	// Запуск горутины для мониторинга количества горутин
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				fmt.Printf("Number of goroutines: %d\n", atomic.LoadInt32(&gorutune.GoroutineCounter))
+
+			case <-gCtx.Done():
+				return
+			}
+		}
+	}()
 
 	if err := g.Wait(); err != nil && gCtx.Err() != context.Canceled {
 		log.Fatalf("Приложение завершено с ошибкой: %v", err)
 	} else {
 		logging.MyLogger.InfoLog.Println("Приложение завершено")
 	}
+
+	fmt.Printf("Finished Number of goroutines: %d\n", atomic.LoadInt32(&gorutune.GoroutineCounter))
+
+	gorutune.GoroutineNames.Range(func(key, value interface{}) bool {
+		fmt.Printf("Remaining goroutine ID %d: %s\n", key, value)
+		return true
+	})
+
 }

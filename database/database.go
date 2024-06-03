@@ -30,7 +30,7 @@ func DbConnection(dbname, hostname, port, username, password string) (*sql.DB, e
 	if err != nil {
 		return nil, fmt.Errorf("error %s when fetching rows", err)
 	}
-	db.Close()
+	//db.Close()
 
 	db, err = sql.Open("mysql", dsn(dbname, hostname, port, username, password))
 	if err != nil {
@@ -49,21 +49,6 @@ func DbConnection(dbname, hostname, port, username, password string) (*sql.DB, e
 	}
 
 	return db, nil
-}
-
-func GracefulShutdown(db *sql.DB, ctx context.Context) error {
-
-	// Здесь вы можете закрыть все соединения, транзакции и т.д.
-	if err := db.Close(); err != nil {
-		return fmt.Errorf("error %s when closing DB", err)
-	}
-
-	<-ctx.Done()
-	if ctx.Err() != context.Canceled {
-		return fmt.Errorf("context canceled during graceful shutdown")
-	}
-
-	return nil
 }
 
 func CreateCandlesTable(db *sql.DB) error {

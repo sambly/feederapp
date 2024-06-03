@@ -11,6 +11,8 @@ import (
 	"main/service"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type Application struct {
@@ -64,10 +66,18 @@ func (app *Application) Run(ctx context.Context) error {
 		app.trigerTimer[period.Name] = false
 	}
 
-	go app.dataFeed.Start(ctx)
+	g, _ := errgroup.WithContext(ctx)
 
-	<-ctx.Done()
-	return nil
+	g.Go(func() error {
+		return app.dataFeed.Start(ctx)
+	})
+
+	if err := g.Wait(); err != nil {
+		return err
+	} else {
+		return nil
+	}
+
 }
 
 func (app *Application) onTimer(period model.Periods) {

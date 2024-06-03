@@ -41,6 +41,7 @@ func NewDataFeed(exchange service.Exchange, timeframe string) *DataFeedSubscript
 }
 
 func (d *DataFeedSubscription) SubscribeTrade(ctx context.Context, pair string, consumer TradeFeedConsumer) {
+	// Подписки на websocket
 	d.wg.Add(1)
 	if _, ok := d.DataFeeds[pair]; !ok {
 		d.DataFeeds[pair] = &DataFeed{}
@@ -54,13 +55,12 @@ func (d *DataFeedSubscription) SubscribeTrade(ctx context.Context, pair string, 
 	})
 }
 
-func (d *DataFeedSubscription) Start(ctx context.Context) {
-	wg := new(sync.WaitGroup)
+func (d *DataFeedSubscription) Start(ctx context.Context) error {
 
 	for key, feed := range d.DataFeeds {
-		wg.Add(1)
+		d.wg.Add(1)
 		go func(key string, feed *DataFeed) {
-			defer wg.Done()
+			defer d.wg.Done()
 			for {
 				select {
 				case <-ctx.Done():
@@ -84,6 +84,6 @@ func (d *DataFeedSubscription) Start(ctx context.Context) {
 
 	// Завершение подписок по websocket
 	d.wg.Wait()
-	wg.Wait()
 	logging.MyLogger.InfoLog.Println("Все подписки завершены")
+	return nil
 }
