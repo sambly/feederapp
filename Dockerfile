@@ -5,15 +5,15 @@ FROM golang:1.21-alpine3.18 AS builder
 RUN apk add --no-cache git
 
 # Установка рабочей директории
-WORKDIR /build
+WORKDIR /app
 
-# Копирование модульного файла и скачивание зависимостей
-ADD . .
+COPY go.mod go.sum ./
 RUN go mod download
+ADD . .
 RUN go mod tidy
 
 # Сборка приложения
-RUN go build -o /myFeederApp
+RUN go build -o myFeederApp .
 
 # Минимальный финальный образ
 FROM alpine:3.18
@@ -21,11 +21,13 @@ FROM alpine:3.18
 # Установка зависимостей для выполнения приложения
 RUN apk add --no-cache ca-certificates
 
+# Устанавливаем рабочую директорию в контейнере
+WORKDIR /app
+
+COPY --from=builder /app/myFeederApp .
+
 # Создание точки монтирования для логов
-VOLUME /log
+VOLUME /app/log
 
-# Копирование исполняемого файла из этапа сборки
-COPY --from=builder /myFeederApp /usr/local/bin/myFeederApp
-
-# Определение команды запуска
-ENTRYPOINT ["/usr/local/bin/myFeederApp"]
+# Команда для запуска вашего приложения
+CMD ["./myFeederApp"]
