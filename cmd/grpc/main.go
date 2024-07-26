@@ -8,17 +8,23 @@ import (
 	"syscall"
 	"time"
 
-	"main/config"
-	"main/database"
-	"main/exchange"
-	"main/logging"
-	"main/model"
 	_ "net/http/pprof"
+
+	"github.com/sambly/exchangeService/pkg/exchange"
+	"github.com/sambly/feederApp/internal/app"
+	"github.com/sambly/feederApp/internal/config"
+	"github.com/sambly/feederApp/internal/database"
+	"github.com/sambly/feederApp/internal/logging"
+	"github.com/sambly/feederApp/internal/model"
 
 	"golang.org/x/sync/errgroup"
 )
 
 func main() {
+
+	var a string
+
+	_ = a
 
 	logging.InitLogger()
 	logging.MyLogger.InfoLog.Println("Запуск приложения")
@@ -63,7 +69,7 @@ func main() {
 		}
 	}
 
-	app, err := NewApp(binance, db, "1m", pairs, periods)
+	app, err := app.NewApp(binance, db, "1m", pairs, periods)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"main/model"
+	"github.com/sambly/feederApp/model"
 
 	"github.com/adshao/go-binance/v2"
 	"github.com/jpillora/backoff"

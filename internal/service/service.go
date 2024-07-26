@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
-	"main/model"
 	"sync"
 	"time"
+
+	"github.com/sambly/feederApp/internal/model"
 )
 
 type Exchange interface {

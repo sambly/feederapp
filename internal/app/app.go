@@ -1,16 +1,17 @@
-package main
+package app
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"main/database"
-	"main/exchange"
-	"main/logging"
-	"main/model"
-	"main/service"
 	"sync"
 	"time"
+
+	"github.com/sambly/feederApp/external/exchangeService/pkg/exchange"
+	"github.com/sambly/feederApp/internal/database"
+	"github.com/sambly/feederApp/internal/logging"
+	"github.com/sambly/feederApp/internal/model"
+	"github.com/sambly/feederApp/internal/service"
 
 	"golang.org/x/sync/errgroup"
 )

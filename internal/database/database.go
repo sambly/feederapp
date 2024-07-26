@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"main/model"
 	"time"
+
+	"github.com/sambly/feederApp/internal/model"
 
 	_ "github.com/go-sql-driver/mysql"
 )

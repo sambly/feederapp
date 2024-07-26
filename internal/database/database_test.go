@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"main/config"
-	"main/exchange"
-	"main/model"
 	"testing"
 	"time"
+
+	"github.com/sambly/feederApp/internal/model"
+
+	"github.com/sambly/feederApp/external/exchangeService/pkg/exchange"
+	"github.com/sambly/feederApp/internal/config"
 )
 
 // Проверка разности времени между двумя candle. Есть ли пропуске во времени

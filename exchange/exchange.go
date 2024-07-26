@@ -3,10 +3,12 @@ package exchange
 import (
 	"context"
 	"fmt"
-	"main/logging"
-	"main/model"
-	"main/service"
 	"sync"
+
+	"github.com/sambly/feederApp/model"
+
+	"github.com/sambly/feederApp/logging"
+	"github.com/sambly/feederApp/service"
 )
 
 type DataFeed struct {

@@ -2,9 +2,10 @@ package test
 
 import (
 	"fmt"
-	"main/model"
 	"testing"
 	"time"
+
+	"github.com/sambly/feederApp/model"
 )
 
 func TestTrade(t *testing.T) {
