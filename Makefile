@@ -4,12 +4,12 @@
 REPO_URL = https://github.com/sambly/exchangeService.git
 REPO_DIR = external/exchangeService
 BRANCH = develop
-COMMIT = 30f2575fc6952275fa3040c4faba5324352dc88f
+COMMIT = e65c704d4ed5005622ec75a5e149d8cf9f80c19d
 PKG_DIR = pkg
 FILES = go.mod go.sum
 
 # Цель по умолчанию
-all: deps
+all: clean deps
 
 # Цель для клонирования репозитория и извлечения папки pkg
 clone-repo:
