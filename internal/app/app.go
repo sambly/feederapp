@@ -3,44 +3,44 @@ package app
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"sync"
 	"time"
 
-	"github.com/sambly/feederApp/external/exchangeService/pkg/exchange"
+	"github.com/sambly/exchangeService/pkg/exchange"
+	exModel "github.com/sambly/exchangeService/pkg/model"
 	"github.com/sambly/feederApp/internal/database"
-	"github.com/sambly/feederApp/internal/logging"
-	"github.com/sambly/feederApp/internal/model"
-	"github.com/sambly/feederApp/internal/service"
-
+	"github.com/sambly/feederApp/internal/logger"
+	iModel "github.com/sambly/feederApp/internal/model"
 	"golang.org/x/sync/errgroup"
 )
 
+var appLogger = logger.AddFields(map[string]interface{}{
+	"package": "app",
+})
+
 type Application struct {
 	mtx      sync.Mutex
-	exchange service.Exchange
-	dataFeed *exchange.DataFeedSubscription
+	dataFeed exchange.RouterDataFeed
 	database *sql.DB
 
 	pairs         []string
-	periods       []model.Periods
-	candles       map[string]map[string]*model.Candle
-	candlesBuffer map[string][]model.Candle
+	periods       []iModel.Periods
+	candles       map[string]map[string]*exModel.Candle
+	candlesBuffer map[string][]exModel.Candle
 	trigerTimer   map[string]bool
 }
 
-func NewApp(exch service.Exchange, db *sql.DB, timeframe string, pairs []string, periods []model.Periods) (*Application, error) {
+func NewApp(dataFeed exchange.RouterDataFeed, db *sql.DB, pairs []string, periods []iModel.Periods) (*Application, error) {
 
 	app := &Application{
 		mtx:      sync.Mutex{},
-		exchange: exch,
-		dataFeed: exchange.NewDataFeed(exch, timeframe),
+		dataFeed: dataFeed,
 		database: db,
 
 		pairs:         pairs,
 		periods:       periods,
-		candles:       make(map[string]map[string]*model.Candle),
-		candlesBuffer: make(map[string][]model.Candle),
+		candles:       make(map[string]map[string]*exModel.Candle),
+		candlesBuffer: make(map[string][]exModel.Candle),
 		trigerTimer:   make(map[string]bool),
 	}
 	return app, nil
@@ -51,39 +51,44 @@ func (app *Application) Run(ctx context.Context) error {
 	timeStart = timeStart.Add(time.Minute)
 
 	for _, pair := range app.pairs {
-		app.dataFeed.SubscribeTrade(ctx, pair, func(trade model.Trade) {
-			app.onTrade(ctx, trade)
-		})
 
 		if _, ok := app.candles[pair]; !ok {
-			app.candles[pair] = map[string]*model.Candle{}
+			app.candles[pair] = map[string]*exModel.Candle{}
 		}
 		for _, period := range app.periods {
 			nextTime := findNextMultipleTime(timeStart, period.Duration)
-			app.candles[pair][period.Name] = &model.Candle{Pair: pair, Time: nextTime}
+			app.candles[pair][period.Name] = &exModel.Candle{Pair: pair, Time: nextTime}
+		}
+		app.dataFeed.SubscribeTrade(ctx, pair, "FeederApp")
+		err := app.dataFeed.SubscribeObserverTrade(ctx, "FeederApp", pair, func(trade exModel.Trade) {
+			app.onTrade(ctx, trade)
+		})
+
+		if err != nil {
+			appLogger.Errorf("error SubscribeObserverTrade: %v", err)
 		}
 	}
 
 	for _, period := range app.periods {
-		app.candlesBuffer[period.Name] = []model.Candle{}
+		app.candlesBuffer[period.Name] = []exModel.Candle{}
 		app.trigerTimer[period.Name] = false
 	}
 
-	g, ctx := errgroup.WithContext(ctx)
+	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return app.dataFeed.Start(ctx)
+		return app.dataFeed.StartTradeFeeder(gCtx)
 	})
 
 	return g.Wait()
 
 }
 
-func (app *Application) onTimer(ctx context.Context, period model.Periods) {
+func (app *Application) onTimer(ctx context.Context, period iModel.Periods) {
 
 	app.trigerTimer[period.Name] = true
 
-	go func(ctx context.Context, period model.Periods) {
+	go func(ctx context.Context, period iModel.Periods) {
 		timer := time.NewTimer(5 * time.Second)
 		defer timer.Stop()
 		select {
@@ -96,7 +101,7 @@ func (app *Application) onTimer(ctx context.Context, period model.Periods) {
 	}(ctx, period)
 }
 
-func (app *Application) onTrade(ctx context.Context, trade model.Trade) {
+func (app *Application) onTrade(ctx context.Context, trade exModel.Trade) {
 
 	select {
 	case <-ctx.Done():
@@ -155,12 +160,12 @@ func (app *Application) onTrade(ctx context.Context, trade model.Trade) {
 	}
 }
 
-func (app *Application) WriteCandleBuffer(candle model.Candle, period model.Periods) {
+func (app *Application) WriteCandleBuffer(candle exModel.Candle, period iModel.Periods) {
 	candle.Time = candle.Time.Add(-1 * period.Duration)
 	app.candlesBuffer[period.Name] = append(app.candlesBuffer[period.Name], candle)
 }
 
-func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
+func (app *Application) WriteTrade(candle *exModel.Candle, period iModel.Periods) {
 
 	candle.Time = candle.Time.Add(period.Duration)
 	candle.CompleteTrade = true
@@ -186,7 +191,7 @@ func (app *Application) WriteTrade(candle *model.Candle, period model.Periods) {
 
 }
 
-func (app *Application) UpdateCandlesTriger(ctx context.Context, period model.Periods) {
+func (app *Application) UpdateCandlesTriger(ctx context.Context, period iModel.Periods) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
@@ -204,7 +209,7 @@ func (app *Application) UpdateCandlesTriger(ctx context.Context, period model.Pe
 
 }
 
-func (app *Application) WriteTradeDatabase(ctx context.Context, period model.Periods) {
+func (app *Application) WriteTradeDatabase(ctx context.Context, period iModel.Periods) {
 
 	candles := app.candlesBuffer[period.Name]
 	go func(ctx context.Context) {
@@ -215,16 +220,16 @@ func (app *Application) WriteTradeDatabase(ctx context.Context, period model.Per
 		default:
 			err := database.InsertCandlesTableNameV3(app.database, period.Name, candles)
 			if err != nil {
-				logging.MyLogger.ErrorOut(fmt.Errorf("error app.WriteTradeDatabase: %v", err))
+				appLogger.Errorf("error app.WriteTradeDatabase: %v", err)
 			}
 			duration := time.Since(start)
-			logging.MyLogger.InfoLog.Printf("t:%v  period %s ", duration, period.Name)
+			appLogger.Infof("t:%v  period %s ", duration, period.Name)
 		}
 	}(ctx)
-	app.candlesBuffer[period.Name] = []model.Candle{}
+	app.candlesBuffer[period.Name] = []exModel.Candle{}
 }
 
-func (app *Application) SetTrigerTimer(period model.Periods, value bool) {
+func (app *Application) SetTrigerTimer(period iModel.Periods, value bool) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 	app.trigerTimer[period.Name] = value

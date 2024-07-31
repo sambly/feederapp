@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sambly/feederApp/model"
+	"github.com/sambly/feederApp/internal/model"
 )
 
 func TestTrade(t *testing.T) {

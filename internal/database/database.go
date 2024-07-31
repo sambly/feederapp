@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sambly/feederApp/internal/model"
-
 	_ "github.com/go-sql-driver/mysql"
+	exModel "github.com/sambly/exchangeService/pkg/model"
 )
 
 func dsn(dbname, hostname, port, username, password string) string {
@@ -112,7 +111,7 @@ func CreateTableName(db *sql.DB, tableName string) error {
 	return nil
 }
 
-func InsertCandlesTable(db *sql.DB, candle model.Candle) error {
+func InsertCandlesTable(db *sql.DB, candle exModel.Candle) error {
 	query := "INSERT INTO candles (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
@@ -148,7 +147,7 @@ func InsertCandlesTable(db *sql.DB, candle model.Candle) error {
 	return nil
 }
 
-func InsertCandlesTableName(db *sql.DB, tableName string, candle model.Candle) error {
+func InsertCandlesTableName(db *sql.DB, tableName string, candle exModel.Candle) error {
 	query := fmt.Sprintf("INSERT INTO %s (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", "candles"+tableName)
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancelfunc()
@@ -184,7 +183,7 @@ func InsertCandlesTableName(db *sql.DB, tableName string, candle model.Candle) e
 	return nil
 }
 
-func InsertCandlesTableNameV2(db *sql.DB, tableName string, candles []model.Candle) error {
+func InsertCandlesTableNameV2(db *sql.DB, tableName string, candles []exModel.Candle) error {
 	if len(candles) == 0 {
 		return nil // Нет свечей для вставки, возвращаем nil
 	}
@@ -228,7 +227,7 @@ func InsertCandlesTableNameV2(db *sql.DB, tableName string, candles []model.Cand
 	return nil
 }
 
-func InsertCandlesTableNameV3(db *sql.DB, tableName string, candles []model.Candle) error {
+func InsertCandlesTableNameV3(db *sql.DB, tableName string, candles []exModel.Candle) error {
 	if len(candles) == 0 {
 		return nil // Нет свечей для вставки, возвращаем nil
 	}
@@ -279,8 +278,8 @@ func InsertCandlesTableNameV3(db *sql.DB, tableName string, candles []model.Cand
 	return nil
 }
 
-func SelectCandles(db *sql.DB, pair string) ([]model.Candle, error) {
-	candles := []model.Candle{}
+func SelectCandles(db *sql.DB, pair string) ([]exModel.Candle, error) {
+	candles := []exModel.Candle{}
 
 	query := "SELECT Time, Pair, Close, Volume FROM candlesch1m WHERE Pair = ?;"
 
@@ -299,7 +298,7 @@ func SelectCandles(db *sql.DB, pair string) ([]model.Candle, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var candle model.Candle
+		var candle exModel.Candle
 		if err := rows.Scan(&candle.Time, &candle.Pair, &candle.Close, &candle.Volume); err != nil {
 			return candles, err
 		}
@@ -312,8 +311,8 @@ func SelectCandles(db *sql.DB, pair string) ([]model.Candle, error) {
 	return candles, nil
 }
 
-func SelectCandle(db *sql.DB, tableName, pair string, timeRounding time.Time) (model.Candle, error) {
-	candle := model.Candle{}
+func SelectCandle(db *sql.DB, tableName, pair string, timeRounding time.Time) (exModel.Candle, error) {
+	candle := exModel.Candle{}
 
 	query := fmt.Sprintf("select Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume from %s WHERE Pair = ? and Time = ?;", "candles"+tableName)
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)

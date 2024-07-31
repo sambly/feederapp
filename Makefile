@@ -4,8 +4,9 @@
 REPO_URL = https://github.com/sambly/exchangeService.git
 REPO_DIR = external/exchangeService
 BRANCH = develop
-COMMIT = 00be8d07565d3fc3bcded184c9ee0c051c27e9fc
+COMMIT = 30f2575fc6952275fa3040c4faba5324352dc88f
 PKG_DIR = pkg
+FILES = go.mod go.sum
 
 # Цель по умолчанию
 all: deps
@@ -18,20 +19,23 @@ clone-repo:
 	fi
 	cd $(REPO_DIR) && git fetch --all && git checkout $(COMMIT);
 
-# Цель для извлечения только папки pkg с использованием sparse-checkout
+# Цель для извлечения только папки pkg и файлов go.mod, go.sum с использованием sparse-checkout
 sparse-checkout:
 	@if [ -d "$(REPO_DIR)" ]; then \
 		cd $(REPO_DIR); \
 		git config core.sparseCheckout true; \
 		echo "$(PKG_DIR)" > .git/info/sparse-checkout; \
+		echo "go.mod" >> .git/info/sparse-checkout; \
+		echo "go.sum" >> .git/info/sparse-checkout; \
 		git read-tree -mu HEAD; \
-	else \
-		echo "Directory $(REPO_DIR) does not exist."; \
-	fi
+ 	else \
+   		echo "Directory $(REPO_DIR) does not exist."; \
+ 	fi
 
 # Цель для установки зависимостей
 deps: clone-repo sparse-checkout
 	@echo "Dependencies prepared."
+	 cd $(REPO_DIR) && go mod tidy
 
 # Цель для чистки
 clean:

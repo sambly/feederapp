@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,19 +14,14 @@ import (
 	"github.com/sambly/feederApp/internal/app"
 	"github.com/sambly/feederApp/internal/config"
 	"github.com/sambly/feederApp/internal/database"
-	"github.com/sambly/feederApp/internal/logger"
 	"github.com/sambly/feederApp/internal/model"
+
+	"github.com/sambly/feederApp/internal/logger"
+
 	"golang.org/x/sync/errgroup"
 )
 
-var (
-	address    = flag.String("addr", "localhost:50051", "address")
-	clientName = flag.String("clientName", "feederApp", "clientName")
-)
-
 func main() {
-
-	flag.Parse()
 
 	logger.InitLogger(true, false)
 
@@ -35,12 +29,13 @@ func main() {
 		"package": "main",
 	})
 
-	mainLogger.Info("запуск приложения feeder-app")
-
 	config, err := config.NewConfig()
 	if err != nil {
 		mainLogger.Fatal(err)
 	}
+
+	mainLogger.Info("запуск приложения feeder-app")
+
 	periods := []model.Periods{
 		{Name: "ch1m", Duration: time.Second * 60},
 		{Name: "ch3m", Duration: time.Minute * 3},
@@ -62,8 +57,6 @@ func main() {
 		mainLogger.Fatal(err)
 	}
 
-	//pairs := []string{"BTCUSDT", "ETHUSDT", "BNBUSDT"}
-
 	mainLogger.Infof("колличество пар: %v", len(pairs))
 
 	db, err := database.DbConnection(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
@@ -79,15 +72,8 @@ func main() {
 		}
 	}
 
-	c, conn, err := exchange.NewClientGrpc(*address)
-	if err != nil {
-		mainLogger.Fatalf("did not connect to grpc: %v", err)
-	}
-
-	defer conn.Close()
-
-	dataFeed := exchange.NewDataFeed(
-		c,
+	dataFeed := exchange.NewDataFeedWithExchange(
+		binance,
 		logadapter.NewLogrusAdapter(logger.AddFieldsEmpty()),
 	)
 

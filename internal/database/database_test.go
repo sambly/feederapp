@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sambly/feederApp/internal/model"
+	exModel "github.com/sambly/exchangeService/pkg/model"
 
-	"github.com/sambly/feederApp/external/exchangeService/pkg/exchange"
+	"github.com/sambly/exchangeService/pkg/exchange"
 	"github.com/sambly/feederApp/internal/config"
 )
 
@@ -76,7 +76,7 @@ func TestDataCandle(t *testing.T) {
 		t.Error(err)
 	}
 
-	notVS := func(cEx, cDb model.Candle) {
+	notVS := func(cEx, cDb exModel.Candle) {
 		fmt.Printf("----Excange------\n%v\n", cEx)
 		fmt.Printf("----DB------\n%v\n", cDb)
 	}
