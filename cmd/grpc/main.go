@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"flag"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,27 +20,22 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var (
-	address    = flag.String("addr", "localhost:50051", "address")
-	clientName = flag.String("clientName", "feederApp", "clientName")
-)
-
 func main() {
 
-	flag.Parse()
+	config, err := config.NewConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	logger.InitLogger(true, false)
+	logger.InitLogger(config.Debug, config.Production)
 
 	mainLogger := logger.AddFields(map[string]interface{}{
 		"package": "main",
+		"module":  "main",
 	})
 
 	mainLogger.Info("запуск приложения feeder-app")
 
-	config, err := config.NewConfig()
-	if err != nil {
-		mainLogger.Fatal(err)
-	}
 	periods := []model.Periods{
 		{Name: "ch1m", Duration: time.Second * 60},
 		{Name: "ch3m", Duration: time.Minute * 3},
@@ -62,8 +57,6 @@ func main() {
 		mainLogger.Fatal(err)
 	}
 
-	//pairs := []string{"BTCUSDT", "ETHUSDT", "BNBUSDT"}
-
 	mainLogger.Infof("колличество пар: %v", len(pairs))
 
 	db, err := database.DbConnection(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
@@ -79,7 +72,7 @@ func main() {
 		}
 	}
 
-	c, conn, err := exchange.NewClientGrpc(*address)
+	c, conn, err := exchange.NewClientGrpc(config.GrpcAddress)
 	if err != nil {
 		mainLogger.Fatalf("did not connect to grpc: %v", err)
 	}

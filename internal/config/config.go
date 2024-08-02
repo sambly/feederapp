@@ -15,6 +15,11 @@ type Config struct {
 	HostDb     string
 	PortDb     string
 	UserDb     string
+
+	// GRPC
+	GrpcAddress string
+	Debug       bool
+	Production  bool
 }
 
 func loadEnv(projectDirName string) error {
@@ -31,6 +36,8 @@ func loadEnv(projectDirName string) error {
 func NewConfig() (*Config, error) {
 
 	var hostDb string
+	production := false
+	debug := false
 
 	if os.Getenv("ENVIRONMENT") == "docker" {
 		var exists bool
@@ -68,12 +75,37 @@ func NewConfig() (*Config, error) {
 		return nil, fmt.Errorf("no .env str DB_USER found")
 	}
 
+	productionString, exists := os.LookupEnv("production")
+	if !exists {
+		return nil, fmt.Errorf("no .env str production found")
+	}
+	if productionString == "true" {
+		production = true
+	}
+
+	debugString, exists := os.LookupEnv("debug")
+	if !exists {
+		return nil, fmt.Errorf("no .env str debug found")
+	}
+	if debugString == "true" {
+		debug = true
+	}
+
+	grpcAddress, exists := os.LookupEnv("grpcAddress")
+	if !exists {
+		return nil, fmt.Errorf("no .env str grpcAddress  found")
+	}
+
 	c := &Config{
 		NameDb:     nameDb,
 		PasswordDb: passwordDb,
 		HostDb:     hostDb,
 		PortDb:     portDb,
 		UserDb:     userDb,
+
+		GrpcAddress: grpcAddress,
+		Debug:       debug,
+		Production:  production,
 	}
 	return c, nil
 }

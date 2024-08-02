@@ -1,10 +1,18 @@
 # Makefile
 
+
+# Загружаем переменные из .env файла
+ifeq (,$(wildcard ./.env))
+  $(error .env file not found)
+endif
+
+include .env
+export $(shell sed 's/=.*//' .env)
+
+
 # Параметры репозитория
 REPO_URL = https://github.com/sambly/exchangeService.git
 REPO_DIR = external/exchangeService
-BRANCH = develop
-COMMIT = e65c704d4ed5005622ec75a5e149d8cf9f80c19d
 PKG_DIR = pkg
 FILES = go.mod go.sum
 
@@ -36,6 +44,7 @@ sparse-checkout:
 deps: clone-repo sparse-checkout
 	@echo "Dependencies prepared."
 	 cd $(REPO_DIR) && go mod tidy
+
 
 # Цель для чистки
 clean:

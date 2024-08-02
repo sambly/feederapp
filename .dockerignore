@@ -1,0 +1,22 @@
+# Игнорировать локальные окружения и конфигурационные файлы
+*.env
+*.local
+
+# Игнорировать временные файлы и директории
+tmp/
+*.log
+
+README.md
+TODO
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+
+# IDE
+.idea
+.vscode 
