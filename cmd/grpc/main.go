@@ -52,6 +52,9 @@ func main() {
 	if err != nil {
 		mainLogger.Fatal(err)
 	}
+
+	//pairs := []string{"BTCUSDT"}
+
 	pairs, err := binance.GetPairsToUSDT()
 	if err != nil {
 		mainLogger.Fatal(err)

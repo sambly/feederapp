@@ -2,9 +2,13 @@ version: '3.8'
 
 services:
   feeder_app:
-    build: .
+    build:
+      context: .
+      args:
+        GITHUB_TOKEN: ${GITHUB_TOKEN}
+        ENVIRONMENT: docker
     volumes:
-      - ./log:/log
+      - ./log:/app/log
     environment:
       ENVIRONMENT: docker
       DB_HOST_Docker: ${DB_HOST_Docker}
@@ -12,6 +16,9 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
+      production: ${production}
+      grpcAddress: ${grpcAddress}
+      debug: ${debug}
     depends_on:
       - mysql
 

@@ -7,12 +7,14 @@ require (
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/joho/godotenv v1.5.1
 	github.com/jpillora/backoff v1.0.0 // indirect
-	github.com/sambly/exchangeService v0.0.0-00010101000000-000000000000 // необходимо
 	golang.org/x/sync v0.7.0
 
 )
 
-require github.com/sirupsen/logrus v1.9.3
+require (
+	github.com/sambly/exchangeService v0.0.0-20240802115647-d0d6dae6550c
+	github.com/sirupsen/logrus v1.9.3
+)
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
@@ -28,5 +30,3 @@ require (
 	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 )
-
-replace github.com/sambly/exchangeService => ./external/exchangeService

@@ -1,53 +1,46 @@
 # Makefile
 
+include env.mk
 
-# Загружаем переменные из .env файла
-ifeq (,$(wildcard ./.env))
-  $(error .env file not found)
+# Установка приватной библиотеки
+
+# Проверяем, если переменная окружения `ENVIRONMENT` равна `docker`
+ifeq ($(ENVIRONMENT),docker)
+  # Не загружаем переменные из .env файла
+  .PHONY: all setup deps
+  all: setup deps
+else
+  # Загружаем переменные из .env файла, если он существует
+  ifeq (,$(wildcard .env))
+    $(error .env file not found)
+  endif
+  include .env
+  export $(shell sed 's/=.*//' .env)
+  # Цели, которые зависят от загрузки .env файла
+  .PHONY: all setup deps
+  all: setup deps
 endif
 
-include .env
-export $(shell sed 's/=.*//' .env)
+# Имя проекта
+PROJECT_NAME := feeder-app
+
+# Закрытый репозиторий
+PRIVATE_REPO := github.com/sambly/exchangeService
+
+# Переменные окружения
+export GOPRIVATE := github.com/sambly
+export GIT_TERMINAL_PROMPT := 1
+
+# Команды
+setup:
+	@echo "Setting up environment..."
+	@if [ -z "$$GITHUB_TOKEN" ]; then echo "Error: GITHUB_TOKEN is not set"; exit 1; fi
+	@git config --global url."https://$$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+
+deps:
+	@echo "Fetching dependencies..."
+	@go get $(PRIVATE_REPO)
+	@go mod tidy
 
 
-# Параметры репозитория
-REPO_URL = https://github.com/sambly/exchangeService.git
-REPO_DIR = external/exchangeService
-PKG_DIR = pkg
-FILES = go.mod go.sum
 
-# Цель по умолчанию
-all: clean deps
-
-# Цель для клонирования репозитория и извлечения папки pkg
-clone-repo:
-	@if [ ! -d "$(REPO_DIR)" ]; then \
-		echo "Cloning repository..."; \
-		git clone --branch $(BRANCH) $(REPO_URL) $(REPO_DIR); \
-	fi
-	cd $(REPO_DIR) && git fetch --all && git checkout $(COMMIT);
-
-# Цель для извлечения только папки pkg и файлов go.mod, go.sum с использованием sparse-checkout
-sparse-checkout:
-	@if [ -d "$(REPO_DIR)" ]; then \
-		cd $(REPO_DIR); \
-		git config core.sparseCheckout true; \
-		echo "$(PKG_DIR)" > .git/info/sparse-checkout; \
-		echo "go.mod" >> .git/info/sparse-checkout; \
-		echo "go.sum" >> .git/info/sparse-checkout; \
-		git read-tree -mu HEAD; \
- 	else \
-   		echo "Directory $(REPO_DIR) does not exist."; \
- 	fi
-
-# Цель для установки зависимостей
-deps: clone-repo sparse-checkout
-	@echo "Dependencies prepared."
-	 cd $(REPO_DIR) && go mod tidy
-
-
-# Цель для чистки
-clean:
-	@echo "Cleaning up..."
-	go clean
-	rm -rf $(REPO_DIR)

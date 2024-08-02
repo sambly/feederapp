@@ -42,7 +42,7 @@ func InitLogger(debug, production bool) {
 	if os.Getenv("ENVIRONMENT") == "docker" {
 		logDir = "./log"
 	} else {
-		projectRoot := filepath.Join(wd, "../")
+		projectRoot := filepath.Join(wd, "../..")
 		logDir = filepath.Join(projectRoot, "log")
 	}
 

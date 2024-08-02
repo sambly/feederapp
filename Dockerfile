@@ -7,13 +7,23 @@ RUN apk add --no-cache git make
 # Установка рабочей директории
 WORKDIR /app
 
-# Копирование и установка зависимостей
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
+# Передача аргументов сборки
+ARG GITHUB_TOKEN
+ARG ENVIRONMENT
+
+
+# Установка сборочных аргументов как переменных окружения
+ENV GITHUB_TOKEN=$GITHUB_TOKEN
+ENV ENVIRONMENT=$ENVIRONMENT
 
 # Выполнение команды make all
-RUN make all
+COPY Makefile ./
+COPY go.mod go.sum ./
+RUN make all GITHUB_TOKEN=${GITHUB_TOKEN} ENVIRONMENT=${ENVIRONMENT}
+
+# Копирование и установка зависимостей
+RUN go mod download
+COPY . .
 
 # Очистка зависимостей и сборка приложения
 RUN go mod tidy && \
