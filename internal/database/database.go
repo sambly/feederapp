@@ -108,6 +108,13 @@ func CreateTableName(db *sql.DB, tableName string) error {
 	if err != nil {
 		return fmt.Errorf("error %s when getting rows affected", err)
 	}
+
+	indexQuery := fmt.Sprintf(`CREATE INDEX idx_pair ON %s (Pair)`, "candles"+tableName)
+	_, err = db.ExecContext(ctx, indexQuery)
+	if err != nil {
+		return fmt.Errorf("error %s when creating index on %s table", err, "candles"+tableName)
+	}
+
 	return nil
 }
 

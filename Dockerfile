@@ -7,22 +7,22 @@ RUN apk add --no-cache git make
 # Установка рабочей директории
 WORKDIR /app
 
-# Передача аргументов сборки
+COPY go.mod go.sum ./
+
+# Установка переменных окружения как аргументов сборки
 ARG GITHUB_TOKEN
 ARG ENVIRONMENT
 
+# Установка переменных окружения
+ENV GOPRIVATE=github.com/sambly
+ENV GIT_TERMINAL_PROMPT=1
+ENV GITHUB_TOKEN=${GITHUB_TOKEN}
+ENV ENVIRONMENT=${ENVIRONMENT}
 
-# Установка сборочных аргументов как переменных окружения
-ENV GITHUB_TOKEN=$GITHUB_TOKEN
-ENV ENVIRONMENT=$ENVIRONMENT
+# Настройка git с использованием переменной GITHUB_TOKEN
+RUN git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
-# Выполнение команды make all
-COPY Makefile ./
-COPY go.mod go.sum ./
-RUN make all GITHUB_TOKEN=${GITHUB_TOKEN} ENVIRONMENT=${ENVIRONMENT}
-
-# Копирование и установка зависимостей
-RUN go mod download
+# Копирование всего остального
 COPY . .
 
 # Очистка зависимостей и сборка приложения
