@@ -12,29 +12,36 @@ import (
 
 func dsn(dbname, hostname, port, username, password string) string {
 	loc := `&loc=Local`
+	if dbname == "" {
+		return fmt.Sprintf("%s:%s@tcp(%s:%s)/", username, password, hostname, port)
+	}
+
 	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&%s", username, password, hostname, port, dbname, loc)
 }
 
 func DbConnection(dbname, hostname, port, username, password string) (*sql.DB, error) {
-	db, err := sql.Open("mysql", dsn(dbname, hostname, port, username, password))
+	// Подключаемся к серверу MySQL без указания базы данных
+	db, err := sql.Open("mysql", dsn("", hostname, port, username, password))
 	if err != nil {
-		return nil, fmt.Errorf("error %s when opening DB", err)
+		return nil, fmt.Errorf("ошибка %s при открытии соединения с MySQL", err)
 	}
+	defer db.Close()
+
 	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelfunc()
 	res, err := db.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS "+dbname)
 	if err != nil {
-		return nil, fmt.Errorf("error %s when creating DB", err)
+		return nil, fmt.Errorf("ошибка %s при создании базы данных", err)
 	}
 	_, err = res.RowsAffected()
 	if err != nil {
-		return nil, fmt.Errorf("error %s when fetching rows", err)
+		return nil, fmt.Errorf("ошибка %s при получении количества строк", err)
 	}
-	//db.Close()
 
+	// Подключаемся к вновь созданной базе данных
 	db, err = sql.Open("mysql", dsn(dbname, hostname, port, username, password))
 	if err != nil {
-		return nil, fmt.Errorf("error %s when opening DB", err)
+		return nil, fmt.Errorf("ошибка %s при открытии соединения с базой данных", err)
 	}
 
 	db.SetMaxOpenConns(20)
@@ -45,7 +52,7 @@ func DbConnection(dbname, hostname, port, username, password string) (*sql.DB, e
 	defer cancelfunc()
 	err = db.PingContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("errors %s pinging DB", err)
+		return nil, fmt.Errorf("ошибка %s при пинге базы данных", err)
 	}
 
 	return db, nil
