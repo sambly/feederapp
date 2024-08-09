@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -75,7 +76,7 @@ func main() {
 		}
 	}
 
-	c, conn, err := exchange.NewClientGrpc(config.GrpcAddress)
+	c, conn, err := exchange.NewClientGrpc(fmt.Sprintf("%s:%s", config.GrpcHost, config.GrpcPort))
 	if err != nil {
 		mainLogger.Fatalf("did not connect to grpc: %v", err)
 	}

@@ -17,9 +17,12 @@ type Config struct {
 	UserDb     string
 
 	// GRPC
-	GrpcAddress string
-	Debug       bool
-	Production  bool
+	GrpcHost string
+	GrpcPort string
+
+	// Log
+	Debug      bool
+	Production bool
 }
 
 func loadEnv(projectDirName string) error {
@@ -36,6 +39,7 @@ func loadEnv(projectDirName string) error {
 func NewConfig() (*Config, error) {
 
 	var hostDb string
+	var hostGrpc string
 	production := false
 	debug := false
 
@@ -44,6 +48,10 @@ func NewConfig() (*Config, error) {
 		hostDb, exists = os.LookupEnv("DB_HOST_Docker")
 		if !exists {
 			return nil, fmt.Errorf("no .env str DB_HOST_Docker  found")
+		}
+		hostGrpc, exists = os.LookupEnv("grpc_Host_Docker")
+		if !exists {
+			return nil, fmt.Errorf("no .env str grpc_Host_Docker  found")
 		}
 
 	} else {
@@ -55,6 +63,13 @@ func NewConfig() (*Config, error) {
 		if !exists {
 			return nil, fmt.Errorf("no .env str DB_HOST_Local  found")
 		}
+
+		hostGrpc, exists = os.LookupEnv("grpc_Host_Local")
+		if !exists {
+			return nil, fmt.Errorf("no .env str grpc_Host_Local  found")
+		}
+
+		fmt.Println(hostGrpc)
 	}
 	// DB
 	nameDb, exists := os.LookupEnv("DB_NAME")
@@ -91,9 +106,9 @@ func NewConfig() (*Config, error) {
 		debug = true
 	}
 
-	grpcAddress, exists := os.LookupEnv("grpcAddress")
+	grpcPort, exists := os.LookupEnv("grpc_Port")
 	if !exists {
-		return nil, fmt.Errorf("no .env str grpcAddress  found")
+		return nil, fmt.Errorf("no .env str grpc_Port  found")
 	}
 
 	c := &Config{
@@ -102,10 +117,11 @@ func NewConfig() (*Config, error) {
 		HostDb:     hostDb,
 		PortDb:     portDb,
 		UserDb:     userDb,
+		GrpcHost:   hostGrpc,
+		GrpcPort:   grpcPort,
 
-		GrpcAddress: grpcAddress,
-		Debug:       debug,
-		Production:  production,
+		Debug:      debug,
+		Production: production,
 	}
 	return c, nil
 }
