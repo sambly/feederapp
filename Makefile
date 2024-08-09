@@ -1,25 +1,18 @@
 # Makefile
 
-include env.mk
 
-# Установка приватной библиотеки
+# Установка приватной библиотеки локально  и запуск go mod tidy 
 
-# Проверяем, если переменная окружения `ENVIRONMENT` равна `docker`
-ifeq ($(ENVIRONMENT),docker)
-  # Не загружаем переменные из .env файла
-  .PHONY: all setup deps
-  all: setup deps
-else
-  # Загружаем переменные из .env файла, если он существует
-  ifeq (,$(wildcard .env))
-    $(error .env file not found)
-  endif
-  include .env
-  export $(shell sed 's/=.*//' .env)
-  # Цели, которые зависят от загрузки .env файла
-  .PHONY: all setup deps
-  all: setup deps
+ifeq (,$(wildcard .env))
+  $(error .env file not found)
 endif
+include .env
+export $(shell sed 's/=.*//' .env)
+
+
+.PHONY: all setup deps
+all: setup deps
+
 
 # Имя проекта
 PROJECT_NAME := feeder-app

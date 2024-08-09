@@ -23,5 +23,9 @@ docker-compose up --build
 // запуск docker compose Эта команда запускает службы, определенные в docker-compose.yml, без пересборки образов. Она использует существующие образы
 docker-compose up
 
+// обычно так запускаю  docker-compose up --build -d 
+
+// и так останавливаю с удалением контейнеров docker-compose down 
 
 
+// запуск make выполнять с git bash 
