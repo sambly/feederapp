@@ -12,7 +12,7 @@ require (
 )
 
 require (
-	github.com/sambly/exchangeService v0.0.0-20240809123329-bc360a549582
+	github.com/sambly/exchangeService v0.0.0-20240813143442-3232ddc34774
 	github.com/sirupsen/logrus v1.9.3
 )
 

@@ -68,8 +68,6 @@ func NewConfig() (*Config, error) {
 		if !exists {
 			return nil, fmt.Errorf("no .env str grpc_Host_Local  found")
 		}
-
-		fmt.Println(hostGrpc)
 	}
 	// DB
 	nameDb, exists := os.LookupEnv("DB_NAME")

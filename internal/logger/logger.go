@@ -1,10 +1,13 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 
 	"github.com/sirupsen/logrus"
 )
@@ -15,6 +18,7 @@ type LogHook struct {
 }
 
 func (hook *LogHook) Fire(entry *logrus.Entry) error {
+
 	line, err := entry.String()
 	if err != nil {
 		return err
@@ -32,6 +36,14 @@ var log = logrus.New()
 func InitLogger(debug, production bool) {
 
 	log.SetOutput(ioutil.Discard) // Send all logs to nowhere by default
+	log.SetReportCaller(true)
+
+	//Общая настройка CallerPrettyfier
+	callerPrettyfier := func(f *runtime.Frame) (string, string) {
+		// Получаем только имя файла без полного пути
+		fileName := filepath.Base(f.File)
+		return "", fileName + ":" + strconv.Itoa(f.Line)
+	}
 
 	wd, err := os.Getwd()
 	if err != nil {
@@ -75,13 +87,25 @@ func InitLogger(debug, production bool) {
 	} else {
 		log.SetLevel(logrus.InfoLevel)
 	}
-	// Настройка формата логов
 	if production {
-		log.SetFormatter(&logrus.JSONFormatter{})
+		//Настройка JSON форматтера для production
+		log.SetFormatter(&logrus.JSONFormatter{
+			CallerPrettyfier: callerPrettyfier,
+		})
 	} else {
-		// The TextFormatter is default, you don't actually have to do this.
-		log.SetFormatter(&logrus.TextFormatter{})
+		// Настройка TextFormatter для development
+		log.SetFormatter(&logrus.TextFormatter{
+			CallerPrettyfier: callerPrettyfier,
+		})
 	}
+
+	// if production {
+	// 	log.SetFormatter(&logrus.JSONFormatter{})
+	// } else {
+	// 	// The TextFormatter is default, you don't actually have to do this.
+	// 	log.SetFormatter(&logrus.TextFormatter{})
+	// }
+
 }
 
 func GetLogger() *logrus.Logger {
@@ -94,4 +118,18 @@ func AddFields(fields map[string]interface{}) *logrus.Entry {
 
 func AddFieldsEmpty() *logrus.Entry {
 	return log.WithFields(logrus.Fields{})
+}
+
+func PrintStackTrace() {
+	// Максимальное количество уровней стека, которое мы хотим проверить
+	const maxDepth = 10
+
+	for i := 0; i < maxDepth; i++ {
+		_, file, line, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+		// Выводим информацию о файле и строке
+		fmt.Printf("Level %d: %s:%d\n", i, filepath.Base(file), line)
+	}
 }

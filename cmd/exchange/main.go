@@ -27,7 +27,6 @@ func main() {
 
 	mainLogger := logger.AddFields(map[string]interface{}{
 		"package": "main",
-		"module":  "main",
 	})
 
 	config, err := config.NewConfig()
