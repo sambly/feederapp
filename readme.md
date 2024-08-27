@@ -29,3 +29,5 @@ docker-compose up
 
 
 // запуск make выполнять с git bash 
+
+// push docker-image docker push sambly/feeder_app
