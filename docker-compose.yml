@@ -7,20 +7,13 @@ services:
       args:
         GITHUB_TOKEN: ${GITHUB_TOKEN}
         ENVIRONMENT: docker
+        BUILD_TARGET: "exchange" 
     volumes:
       - ./log:/app/log
     environment:
       ENVIRONMENT: docker
-      DB_HOST_Docker: ${DB_HOST_Docker}
-      DB_PORT: ${DB_PORT}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
-      grpc_Host_Docker: ${grpc_Host_Docker}
-      grpc_Host_Local: ${grpc_Host_Local}
-      grpc_Port: ${grpc_Port}
-      production: ${production}
-      debug: ${debug}
+    env_file:
+      - .env
     depends_on:
       - mysql
 
@@ -30,7 +23,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
     ports:
-      - "3307:3306"
+      - "${DB_PORT_HOST:-3307}:${DB_PORT:-3306}"
     volumes:
       - mysql_data:/var/lib/mysql
 

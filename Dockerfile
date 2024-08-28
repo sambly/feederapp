@@ -25,9 +25,12 @@ RUN git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "htt
 # Копирование всего остального
 COPY . .
 
-# Очистка зависимостей и сборка приложения
-RUN go mod tidy && \
-    go build -o myFeederApp ./cmd/grpc
+RUN go mod tidy
+
+#Default exchange
+ARG BUILD_TARGET=exchange
+
+RUN go build -o myFeederApp ./cmd/$BUILD_TARGET
 
 # Минимальный финальный образ
 FROM alpine:3.18
