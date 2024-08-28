@@ -45,13 +45,13 @@ func NewConfig() (*Config, error) {
 
 	if os.Getenv("ENVIRONMENT") == "docker" {
 		var exists bool
-		hostDb, exists = os.LookupEnv("DB_HOST_Docker")
+		hostDb, exists = os.LookupEnv("DB_HOST_DOCKER")
 		if !exists {
-			return nil, fmt.Errorf("no .env str DB_HOST_Docker  found")
+			return nil, fmt.Errorf("no .env str DB_HOST_DOCKER  found")
 		}
-		hostGrpc, exists = os.LookupEnv("grpc_Host_Docker")
+		hostGrpc, exists = os.LookupEnv("GRPC_HOST_DOCKER")
 		if !exists {
-			return nil, fmt.Errorf("no .env str grpc_Host_Docker  found")
+			return nil, fmt.Errorf("no .env str GRPC_HOST_DOCKER  found")
 		}
 
 	} else {
@@ -59,14 +59,14 @@ func NewConfig() (*Config, error) {
 		if err := loadEnv("feederApp"); err != nil {
 			return nil, err
 		}
-		hostDb, exists = os.LookupEnv("DB_HOST_Local")
+		hostDb, exists = os.LookupEnv("DB_HOST_LOCAL")
 		if !exists {
-			return nil, fmt.Errorf("no .env str DB_HOST_Local  found")
+			return nil, fmt.Errorf("no .env str DB_HOST_LOCAL  found")
 		}
 
-		hostGrpc, exists = os.LookupEnv("grpc_Host_Local")
+		hostGrpc, exists = os.LookupEnv("GRPC_HOST_LOCAL")
 		if !exists {
-			return nil, fmt.Errorf("no .env str grpc_Host_Local  found")
+			return nil, fmt.Errorf("no .env str GRPC_HOST_LOCAL  found")
 		}
 	}
 	// DB
@@ -88,25 +88,25 @@ func NewConfig() (*Config, error) {
 		return nil, fmt.Errorf("no .env str DB_USER found")
 	}
 
-	productionString, exists := os.LookupEnv("production")
+	productionString, exists := os.LookupEnv("PRODUCTION_LOG")
 	if !exists {
-		return nil, fmt.Errorf("no .env str production found")
+		return nil, fmt.Errorf("no .env str PRODUCTION_LOG found")
 	}
 	if productionString == "true" {
 		production = true
 	}
 
-	debugString, exists := os.LookupEnv("debug")
+	debugString, exists := os.LookupEnv("DEBUG_LOG")
 	if !exists {
-		return nil, fmt.Errorf("no .env str debug found")
+		return nil, fmt.Errorf("no .env str DEBUG_LOG found")
 	}
 	if debugString == "true" {
 		debug = true
 	}
 
-	grpcPort, exists := os.LookupEnv("grpc_Port")
+	grpcPort, exists := os.LookupEnv("GRPC_PORT")
 	if !exists {
-		return nil, fmt.Errorf("no .env str grpc_Port  found")
+		return nil, fmt.Errorf("no .env str GRPC_PORT  found")
 	}
 
 	c := &Config{
