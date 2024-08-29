@@ -50,13 +50,8 @@ func InitLogger(debug, production bool) {
 		log.Fatalf("Failed to get current working directory: %v", err)
 	}
 
-	var logDir string
-	if os.Getenv("ENVIRONMENT") == "docker" {
-		logDir = "./log"
-	} else {
-		projectRoot := filepath.Join(wd, "../..")
-		logDir = filepath.Join(projectRoot, "log")
-	}
+	projectRoot := filepath.Join(wd, "../..")
+	logDir := filepath.Join(projectRoot, "log")
 
 	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
 		log.Fatalf("Failed to create log directory: %v", err)
