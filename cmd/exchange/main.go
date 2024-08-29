@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,16 +24,16 @@ import (
 
 func main() {
 
-	logger.InitLogger(true, false)
+	config, err := config.NewConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	logger.InitLogger(config.Debug, config.Production)
 
 	mainLogger := logger.AddFields(map[string]interface{}{
 		"package": "main",
 	})
-
-	config, err := config.NewConfig()
-	if err != nil {
-		mainLogger.Fatal(err)
-	}
 
 	mainLogger.Info("запуск приложения feeder-app")
 
@@ -52,6 +53,7 @@ func main() {
 	if err != nil {
 		mainLogger.Fatal(err)
 	}
+
 	pairs, err := binance.GetPairsToUSDT()
 	if err != nil {
 		mainLogger.Fatal(err)
