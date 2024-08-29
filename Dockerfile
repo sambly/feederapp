@@ -12,6 +12,7 @@ COPY go.mod go.sum ./
 # Установка переменных окружения как аргументов сборки
 ARG GITHUB_TOKEN
 ARG ENVIRONMENT
+ARG BUILD_TARGET=exchange
 
 # Установка переменных окружения
 ENV GOPRIVATE=github.com/sambly
@@ -22,15 +23,16 @@ ENV ENVIRONMENT=${ENVIRONMENT}
 # Настройка git с использованием переменной GITHUB_TOKEN
 RUN git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
-# Копирование всего остального
-COPY . .
+# Установка зависимостей Go
+RUN go mod download
 
-RUN go mod tidy
+# Копируем остальные файлы проекта
+COPY internal ./internal
+COPY cmd ./cmd
 
-#Default exchange
-ARG BUILD_TARGET=exchange
+RUN go build -o ./cmd/exchange/myFeederApp ./cmd/${BUILD_TARGET}
 
-RUN go build -o myFeederApp ./cmd/$BUILD_TARGET
+
 
 # Минимальный финальный образ
 FROM alpine:3.18
@@ -46,9 +48,9 @@ RUN apk add --no-cache ca-certificates tzdata \
 
 
 # Устанавливаем рабочую директорию в контейнере
-WORKDIR /app
+WORKDIR /app/cmd/exchange
 
-COPY --from=builder /app/myFeederApp .
+COPY --from=builder /app/cmd/exchange/myFeederApp .
 
 # Создание точки монтирования для логов
 VOLUME /app/log
