@@ -6,7 +6,6 @@ services:
       context: .
       args:
         GITHUB_TOKEN: ${GITHUB_TOKEN}
-        ENVIRONMENT: docker
         BUILD_TARGET: ${BUILD_TARGET:-exchange}
     volumes:
       - ./log:/app/log

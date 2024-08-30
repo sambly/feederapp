@@ -8,6 +8,9 @@ docker login
 //Эта команда создает Docker-образ на основе Dockerfile, находящегося в текущей директории.
 docker build -t sambly/feeder_app .
 
+// Запуск с arg 
+docker build --build-arg GITHUB_TOKEN=<your_github_token> --build-arg BUILD_TARGET=<target> -t sambly/feeder_app .
+
 // Запуск контейнера Docker: Эта команда запускает контейнер из образа в интерактивном режиме (-it). Флаг --rm удаляет контейнер после его остановки.
 docker run --rm -it sambly/feeder_app
 
