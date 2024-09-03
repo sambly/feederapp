@@ -218,7 +218,7 @@ func (app *Application) WriteTradeDatabase(ctx context.Context, period iModel.Pe
 		case <-ctx.Done():
 			return
 		default:
-			err := database.InsertCandlesTableNameV3(app.database, period.Name, candles)
+			err := database.InsertCandlesTableName(app.database, period.Name, candles)
 			if err != nil {
 				appLogger.Errorf("error app.WriteTradeDatabase: %v", err)
 			}

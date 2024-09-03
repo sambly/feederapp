@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql" // MySQL driver initialization
 	exModel "github.com/sambly/exchangeService/pkg/model"
 )
 
@@ -163,87 +163,7 @@ func InsertCandlesTable(db *sql.DB, candle exModel.Candle) error {
 	return nil
 }
 
-func InsertCandlesTableName(db *sql.DB, tableName string, candle exModel.Candle) error {
-	query := fmt.Sprintf("INSERT INTO %s (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", "candles"+tableName)
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancelfunc()
-	stmtLicense, err := db.PrepareContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("error %s when preparing SQL statement", err)
-	}
-	defer stmtLicense.Close()
-
-	res, err := stmtLicense.ExecContext(
-		ctx,
-		candle.Time,
-		candle.Pair,
-		candle.Open,
-		candle.Close,
-		candle.Low,
-		candle.High,
-		candle.Volume,
-		candle.QuoteVolume,
-		candle.AmountTrade,
-		candle.AmountTradeBuy,
-		candle.ActiveBuyVolume,
-		candle.ActiveBuyQuoteVolume,
-	)
-	if err != nil {
-		return fmt.Errorf("error %s when inserting row into %s table", err, "candles"+tableName)
-	}
-	_, err = res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("error %s when finding rows affected", err)
-	}
-
-	return nil
-}
-
-func InsertCandlesTableNameV2(db *sql.DB, tableName string, candles []exModel.Candle) error {
-	if len(candles) == 0 {
-		return nil // Нет свечей для вставки, возвращаем nil
-	}
-
-	query := fmt.Sprintf("INSERT INTO %s (Time,Pair,Open,Close,Low,High,Volume,QuoteVolume,AmountTrade,AmountTradeBuy,ActiveBuyVolume,ActiveBuyQuoteVolume) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", "candles"+tableName)
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancelfunc()
-
-	stmtLicense, err := db.PrepareContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("error %s when preparing SQL statement", err)
-	}
-	defer stmtLicense.Close()
-
-	for _, candle := range candles {
-		res, err := stmtLicense.ExecContext(
-			ctx,
-			candle.Time,
-			candle.Pair,
-			candle.Open,
-			candle.Close,
-			candle.Low,
-			candle.High,
-			candle.Volume,
-			candle.QuoteVolume,
-			candle.AmountTrade,
-			candle.AmountTradeBuy,
-			candle.ActiveBuyVolume,
-			candle.ActiveBuyQuoteVolume,
-		)
-		if err != nil {
-			return fmt.Errorf("error %s when inserting row into %s table", err, "candles"+tableName)
-		}
-
-		_, err = res.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("error %s when finding rows affected", err)
-		}
-	}
-
-	return nil
-}
-
-func InsertCandlesTableNameV3(db *sql.DB, tableName string, candles []exModel.Candle) error {
+func InsertCandlesTableName(db *sql.DB, tableName string, candles []exModel.Candle) error {
 	if len(candles) == 0 {
 		return nil // Нет свечей для вставки, возвращаем nil
 	}
@@ -257,7 +177,10 @@ func InsertCandlesTableNameV3(db *sql.DB, tableName string, candles []exModel.Ca
 	if err != nil {
 		return fmt.Errorf("error %s when beginning transaction", err)
 	}
-	defer tx.Rollback()
+
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	stmtLicense, err := tx.PrepareContext(ctx, query)
 	if err != nil {

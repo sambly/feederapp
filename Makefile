@@ -36,8 +36,15 @@ deps:
 	@go mod tidy
 
 
-# Основные задачи lint 
-lint: lint-all-env fix-all-env compare-all-envs
+
+
+lint: lint-golangci lint-env
+
+lint-golangci:
+	golangci-lint run || true
+
+# Основные задачи lint-env 
+lint-env: lint-all-env fix-all-env compare-all-envs
 
 # ./bin  нужно добавить путь если не добавлен 
 install-linter:
