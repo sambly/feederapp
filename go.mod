@@ -1,4 +1,4 @@
-module github.com/sambly/feederApp
+module github.com/sambly/feederapp
 
 go 1.22.5
 

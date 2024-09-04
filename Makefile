@@ -1,18 +1,11 @@
 # Makefile
 
-
-# Установка приватной библиотеки локально  и запуск go mod tidy 
-
+# Установка приватной библиотеки локально и запуск go mod tidy 
 ifeq (,$(wildcard .env))
   $(error .env file not found)
 endif
 include .env
 export $(shell sed 's/=.*//' .env)
-
-
-.PHONY: all setup deps
-all: setup deps
-
 
 # Имя проекта
 PROJECT_NAME := feeder-app
@@ -24,30 +17,42 @@ PRIVATE_REPO := github.com/sambly/exchangeService
 export GOPRIVATE := github.com/sambly
 export GIT_TERMINAL_PROMPT := 1
 
-# Команды
-setup:
+
+# Настройка окружения Go 
+.PHONY: setup-env prepare install-deps
+setup-env: prepare install-deps
+
+prepare:
 	@echo "Setting up environment..."
 	@if [ -z "$$GITHUB_TOKEN" ]; then echo "Error: GITHUB_TOKEN is not set"; exit 1; fi
 	@git config --global url."https://$$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
-
-deps:
+install-deps:
 	@echo "Fetching dependencies..."
 	@go get $(PRIVATE_REPO)
 	@go mod tidy
 
 
+# Линтеры 
+.PHONY: lint lint-golangci install-linter-golangci lint-env install-linter-env lint-all-env fix-env fix-all-env compare-envs compare-all-envs
+lint: lint-go-fmt lint-golangci lint-env
 
 
-lint: lint-golangci lint-env
+lint-go-fmt:
+	gofmt -s -w .
 
 lint-golangci:
 	golangci-lint run || true
+
+install-linter-golangci:
+	@echo "Установка golangci..."
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
 
 # Основные задачи lint-env 
 lint-env: lint-all-env fix-all-env compare-all-envs
 
 # ./bin  нужно добавить путь если не добавлен 
-install-linter:
+install-linter-env:
 	@echo "Установка dotenv-linter..."
 	curl -sSfL https://raw.githubusercontent.com/dotenv-linter/dotenv-linter/master/install.sh | sh -s -- -b usr/local/bin v3.3.0
 

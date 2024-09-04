@@ -13,11 +13,11 @@ import (
 
 	"github.com/sambly/exchangeService/pkg/exchange"
 	"github.com/sambly/exchangeService/pkg/logadapter"
-	"github.com/sambly/feederApp/internal/app"
-	"github.com/sambly/feederApp/internal/config"
-	"github.com/sambly/feederApp/internal/database"
-	"github.com/sambly/feederApp/internal/logger"
-	"github.com/sambly/feederApp/internal/model"
+	"github.com/sambly/feederapp/internal/app"
+	"github.com/sambly/feederapp/internal/config"
+	"github.com/sambly/feederapp/internal/database"
+	"github.com/sambly/feederapp/internal/logger"
+	"github.com/sambly/feederapp/internal/model"
 	"golang.org/x/sync/errgroup"
 )
 

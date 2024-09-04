@@ -8,9 +8,9 @@ import (
 
 	"github.com/sambly/exchangeService/pkg/exchange"
 	exModel "github.com/sambly/exchangeService/pkg/model"
-	"github.com/sambly/feederApp/internal/database"
-	"github.com/sambly/feederApp/internal/logger"
-	iModel "github.com/sambly/feederApp/internal/model"
+	"github.com/sambly/feederapp/internal/database"
+	"github.com/sambly/feederapp/internal/logger"
+	iModel "github.com/sambly/feederapp/internal/model"
 	"golang.org/x/sync/errgroup"
 )
 

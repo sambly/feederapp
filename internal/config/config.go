@@ -56,7 +56,7 @@ func NewConfig() (*Config, error) {
 
 	} else {
 		var exists bool
-		if err := loadEnv("feederApp"); err != nil {
+		if err := loadEnv("feederapp"); err != nil {
 			return nil, err
 		}
 		hostDb, exists = os.LookupEnv("DB_HOST_LOCAL")

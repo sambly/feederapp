@@ -10,7 +10,7 @@ import (
 	exModel "github.com/sambly/exchangeService/pkg/model"
 
 	"github.com/sambly/exchangeService/pkg/exchange"
-	"github.com/sambly/feederApp/internal/config"
+	"github.com/sambly/feederapp/internal/config"
 )
 
 // Проверка разности времени между двумя candle. Есть ли пропуске во времени
@@ -89,12 +89,12 @@ func TestDataCandle(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		allCandles += 1
+		allCandles++
 
 		// VS
 		if candleDb.Time.Equal(candleExch.Time) {
 
-			checkCandles += 1
+			checkCandles++
 
 			if candleDb.Open != candleExch.Open {
 				notVS(candleExch, candleDb)
