@@ -60,13 +60,10 @@ func (app *Application) Run(ctx context.Context) error {
 			app.candles[pair][period.Name] = &exModel.Candle{Pair: pair, Time: nextTime}
 		}
 		app.dataFeed.SubscribeTrade(ctx, pair, "FeederApp")
-		err := app.dataFeed.SubscribeObserverTrade(ctx, "FeederApp", pair, func(trade exModel.Trade) {
+		app.dataFeed.SubscribeObserverTrade(ctx, "FeederApp", pair, func(trade exModel.Trade) {
 			app.onTrade(ctx, trade)
 		})
 
-		if err != nil {
-			appLogger.Errorf("error SubscribeObserverTrade: %v", err)
-		}
 	}
 
 	for _, period := range app.periods {

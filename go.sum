@@ -32,8 +32,8 @@ github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9G
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/sambly/exchangeService v0.0.0-20240829115344-af80e1717539 h1:FyuV+FoUtvow9NnI8LUcDDrnXFBmrHyAH5fgQLr4jJ0=
-github.com/sambly/exchangeService v0.0.0-20240829115344-af80e1717539/go.mod h1:NEZWCuGGXHMBsqaNsCW8c12S1MYZAwJNO68asTgTe78=
+github.com/sambly/exchangeService v0.0.0-20240904150336-e69f35cc4a82 h1:gSoIdaWaQR9KyjFi6q57R7W/maXI0djC8b0Yhn/z3Nk=
+github.com/sambly/exchangeService v0.0.0-20240904150336-e69f35cc4a82/go.mod h1:NEZWCuGGXHMBsqaNsCW8c12S1MYZAwJNO68asTgTe78=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
 github.com/sirupsen/logrus v1.9.3/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
