@@ -37,12 +37,12 @@ func main() {
 	mainLogger.Info("запуск приложения feeder-app")
 
 	periods := []model.Periods{
-		{Name: "ch1m", Duration: time.Second * 60},
-		{Name: "ch3m", Duration: time.Minute * 3},
-		{Name: "ch15m", Duration: time.Minute * 15},
-		{Name: "ch1h", Duration: time.Hour},
-		{Name: "ch4h", Duration: time.Hour * 4},
-		{Name: "ch12h", Duration: time.Hour * 12},
+		{Name: "1m", Duration: time.Second * 60},
+		{Name: "3m", Duration: time.Minute * 3},
+		{Name: "15m", Duration: time.Minute * 15},
+		{Name: "1h", Duration: time.Hour},
+		{Name: "4h", Duration: time.Hour * 4},
+		{Name: "1d", Duration: time.Hour * 12},
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -60,17 +60,9 @@ func main() {
 
 	mainLogger.Infof("колличество пар: %v", len(pairs))
 
-	db, err := database.DbConnection(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
+	db, err := database.DbInit(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
 	if err != nil {
 		mainLogger.Fatal(err)
-	}
-	defer db.Close()
-
-	for _, period := range periods {
-		err = database.CreateTableName(db, period.Name)
-		if err != nil {
-			mainLogger.Fatal(err)
-		}
 	}
 
 	c, conn, err := exchange.NewClientGrpc(fmt.Sprintf("%s:%s", config.GrpcHost, config.GrpcPort))

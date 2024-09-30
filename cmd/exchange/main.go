@@ -61,17 +61,9 @@ func main() {
 
 	mainLogger.Infof("колличество пар: %v", len(pairs))
 
-	db, err := database.DbConnection(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
+	db, err := database.DbInit(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
 	if err != nil {
 		mainLogger.Fatal(err)
-	}
-	defer db.Close()
-
-	for _, period := range periods {
-		err = database.CreateTableName(db, period.Name)
-		if err != nil {
-			mainLogger.Fatal(err)
-		}
 	}
 
 	dataFeed := exchange.NewDataFeedWithExchange(

@@ -12,14 +12,18 @@ require (
 )
 
 require (
-	github.com/sambly/exchangeService v0.0.0-20240904150336-e69f35cc4a82
+	github.com/sambly/exchangeService v1.1.0
 	github.com/sirupsen/logrus v1.9.3
+	gorm.io/driver/mysql v1.5.7
+	gorm.io/gorm v1.25.12
 )
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/bitly/go-simplejson v0.5.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect

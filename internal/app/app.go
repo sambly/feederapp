@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/sambly/feederapp/internal/logger"
 	iModel "github.com/sambly/feederapp/internal/model"
 	"golang.org/x/sync/errgroup"
+	"gorm.io/gorm"
 )
 
 var appLogger = logger.AddFields(map[string]interface{}{
@@ -21,7 +21,7 @@ var appLogger = logger.AddFields(map[string]interface{}{
 type Application struct {
 	mtx      sync.Mutex
 	dataFeed exchange.RouterDataFeed
-	database *sql.DB
+	database *gorm.DB
 
 	pairs         []string
 	periods       []iModel.Periods
@@ -30,7 +30,7 @@ type Application struct {
 	trigerTimer   map[string]bool
 }
 
-func NewApp(dataFeed exchange.RouterDataFeed, db *sql.DB, pairs []string, periods []iModel.Periods) (*Application, error) {
+func NewApp(dataFeed exchange.RouterDataFeed, db *gorm.DB, pairs []string, periods []iModel.Periods) (*Application, error) {
 
 	app := &Application{
 		mtx:      sync.Mutex{},
@@ -215,7 +215,7 @@ func (app *Application) WriteTradeDatabase(ctx context.Context, period iModel.Pe
 		case <-ctx.Done():
 			return
 		default:
-			err := database.InsertCandlesTableName(app.database, period.Name, candles)
+			err := database.InsertCandles(app.database, candles, period.Name)
 			if err != nil {
 				appLogger.Errorf("error app.WriteTradeDatabase: %v", err)
 			}

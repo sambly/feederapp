@@ -19,7 +19,7 @@ export GIT_TERMINAL_PROMPT := 1
 
 
 # Настройка окружения Go 
-.PHONY: setup-env prepare install-deps
+.PHONY: setup-env prepare install-deps install-deps-develop
 setup-env: prepare install-deps
 
 prepare:
@@ -29,6 +29,11 @@ prepare:
 install-deps:
 	@echo "Fetching dependencies..."
 	@go get $(PRIVATE_REPO)
+	@go mod tidy
+# использовать ветку develop
+install-deps-develop:
+	@echo "Fetching dependencies..."
+	@go get $(PRIVATE_REPO)@develop
 	@go mod tidy
 
 
