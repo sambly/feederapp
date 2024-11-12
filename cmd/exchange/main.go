@@ -24,12 +24,17 @@ import (
 
 func main() {
 
-	config, err := config.NewConfig()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cfg, err := config.NewConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	logger.InitLogger(config.Debug, config.Production)
+	if err := logger.InitLogger(cfg.DebugLog, cfg.ProductionLog); err != nil {
+		log.Fatalf("failed to InitLogger: %v", err)
+	}
 
 	mainLogger := logger.AddFields(map[string]interface{}{
 		"package": "main",
@@ -46,30 +51,33 @@ func main() {
 		{Name: "ch12h", Duration: time.Hour * 12},
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	binance, err := exchange.NewBinance(ctx)
+	binance, err := exchange.NewBinance(ctx,
+		exchange.WithBinanceLogger(logadapter.NewLogrusAdapter(logger.AddFieldsEmpty())),
+	)
 	if err != nil {
-		mainLogger.Fatal(err)
+		mainLogger.Fatalf("failed to create exchange instance: %v", err)
 	}
 
-	pairs, err := binance.GetPairsToUSDT()
+	pairs, err := binance.GetPairsToUSDT(ctx)
 	if err != nil {
 		mainLogger.Fatal(err)
 	}
 
 	mainLogger.Infof("колличество пар: %v", len(pairs))
 
-	db, err := database.DbInit(config.NameDb, config.HostDb, config.PortDb, config.UserDb, config.PasswordDb)
+	db, err := database.DbInit(cfg.NameDb, cfg.HostDb, cfg.PortDb, cfg.UserDb, cfg.PasswordDb)
 	if err != nil {
 		mainLogger.Fatal(err)
 	}
 
-	dataFeed := exchange.NewDataFeedWithExchange(
+	dataFeed := exchange.NewDataFeed(
 		binance,
-		logadapter.NewLogrusAdapter(logger.AddFieldsEmpty()),
+		exchange.WithDataFeedLogger(logadapter.NewLogrusAdapter(logger.AddFieldsEmpty())),
 	)
+
+	if err != nil {
+		mainLogger.Fatalf("failed to initialize data feed: %v", err)
+	}
 
 	app, err := app.NewApp(dataFeed, db, pairs, periods)
 	if err != nil {

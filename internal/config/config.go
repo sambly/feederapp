@@ -21,8 +21,8 @@ type Config struct {
 	GrpcPort string
 
 	// Log
-	Debug      bool
-	Production bool
+	DebugLog      bool
+	ProductionLog bool
 }
 
 func loadEnv(projectDirName string) error {
@@ -118,8 +118,8 @@ func NewConfig() (*Config, error) {
 		GrpcHost:   hostGrpc,
 		GrpcPort:   grpcPort,
 
-		Debug:      debug,
-		Production: production,
+		DebugLog:      debug,
+		ProductionLog: production,
 	}
 	return c, nil
 }

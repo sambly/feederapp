@@ -20,7 +20,7 @@ var appLogger = logger.AddFields(map[string]interface{}{
 
 type Application struct {
 	mtx      sync.Mutex
-	dataFeed exchange.RouterDataFeed
+	dataFeed *exchange.DataFeed
 	database *gorm.DB
 
 	pairs         []string
@@ -30,7 +30,7 @@ type Application struct {
 	trigerTimer   map[string]bool
 }
 
-func NewApp(dataFeed exchange.RouterDataFeed, db *gorm.DB, pairs []string, periods []iModel.Periods) (*Application, error) {
+func NewApp(dataFeed *exchange.DataFeed, db *gorm.DB, pairs []string, periods []iModel.Periods) (*Application, error) {
 
 	app := &Application{
 		mtx:      sync.Mutex{},
@@ -59,7 +59,7 @@ func (app *Application) Run(ctx context.Context) error {
 			nextTime := findNextMultipleTime(timeStart, period.Duration)
 			app.candles[pair][period.Name] = &exModel.Candle{Pair: pair, Time: nextTime}
 		}
-		app.dataFeed.SubscribeTrade(ctx, pair, "FeederApp")
+		app.dataFeed.SubscribeTrade(pair)
 		app.dataFeed.SubscribeObserverTrade(ctx, "FeederApp", pair, func(trade exModel.Trade) {
 			app.onTrade(ctx, trade)
 		})
@@ -74,7 +74,7 @@ func (app *Application) Run(ctx context.Context) error {
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return app.dataFeed.StartTradeFeeder(gCtx)
+		return app.dataFeed.StartTradeFeeder(gCtx, "FeederApp")
 	})
 
 	return g.Wait()

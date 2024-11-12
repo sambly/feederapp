@@ -33,33 +33,24 @@ func (hook *LogHook) Levels() []logrus.Level {
 
 var log = logrus.New()
 
-func InitLogger(debug, production bool) {
+// Общая настройка CallerPrettyfier
+var callerPrettyfier = func(f *runtime.Frame) (string, string) {
+	// Получаем только имя файла без полного пути
+	fileName := filepath.Base(f.File)
+	return "", fileName + ":" + strconv.Itoa(f.Line)
+}
+
+func InitLogger(debug, production bool) error {
 
 	log.SetOutput(ioutil.Discard) // Send all logs to nowhere by default
 	log.SetReportCaller(true)
 
-	//Общая настройка CallerPrettyfier
-	callerPrettyfier := func(f *runtime.Frame) (string, string) {
-		// Получаем только имя файла без полного пути
-		fileName := filepath.Base(f.File)
-		return "", fileName + ":" + strconv.Itoa(f.Line)
+	if err := os.MkdirAll("log", os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create log directory: %v", err)
 	}
-
-	wd, err := os.Getwd()
+	logFile, err := os.OpenFile("./log/app.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		log.Fatalf("Failed to get current working directory: %v", err)
-	}
-
-	projectRoot := filepath.Join(wd, "../..")
-	logDir := filepath.Join(projectRoot, "log")
-
-	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
-		log.Fatalf("Failed to create log directory: %v", err)
-	}
-
-	logFile, err := os.OpenFile(filepath.Join(logDir, "app.log"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed OpenFile log: %v", err)
 	}
 
 	// Настройка хука для логирования в файл
@@ -72,16 +63,26 @@ func InitLogger(debug, production bool) {
 	// Настройка хука для логирования в консоль
 	consoleHook := &LogHook{
 		Writer:    os.Stdout,
-		LogLevels: []logrus.Level{logrus.ErrorLevel},
+		LogLevels: []logrus.Level{logrus.ErrorLevel, logrus.FatalLevel},
 	}
 	log.AddHook(consoleHook)
 
+	LoggerSetLevel(debug)
+	LoggerSetFormatter(production)
+
+	return nil
+}
+
+func LoggerSetLevel(debug bool) {
 	// Устанавливаем основной уровень логирования для логгера
 	if debug {
 		log.SetLevel(logrus.DebugLevel)
 	} else {
 		log.SetLevel(logrus.InfoLevel)
 	}
+}
+
+func LoggerSetFormatter(production bool) {
 	if production {
 		//Настройка JSON форматтера для production
 		log.SetFormatter(&logrus.JSONFormatter{
@@ -93,14 +94,6 @@ func InitLogger(debug, production bool) {
 			CallerPrettyfier: callerPrettyfier,
 		})
 	}
-
-	// if production {
-	// 	log.SetFormatter(&logrus.JSONFormatter{})
-	// } else {
-	// 	// The TextFormatter is default, you don't actually have to do this.
-	// 	log.SetFormatter(&logrus.TextFormatter{})
-	// }
-
 }
 
 func GetLogger() *logrus.Logger {
@@ -113,18 +106,4 @@ func AddFields(fields map[string]interface{}) *logrus.Entry {
 
 func AddFieldsEmpty() *logrus.Entry {
 	return log.WithFields(logrus.Fields{})
-}
-
-func PrintStackTrace() {
-	// Максимальное количество уровней стека, которое мы хотим проверить
-	const maxDepth = 10
-
-	for i := 0; i < maxDepth; i++ {
-		_, file, line, ok := runtime.Caller(i)
-		if !ok {
-			break
-		}
-		// Выводим информацию о файле и строке
-		fmt.Printf("Level %d: %s:%d\n", i, filepath.Base(file), line)
-	}
 }
