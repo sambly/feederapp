@@ -3,12 +3,13 @@ package config
 import (
 	"fmt"
 	"os"
-	"regexp"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
+	ExchangeType string
+
 	// DB
 	NameDb     string
 	PasswordDb string
@@ -25,17 +26,6 @@ type Config struct {
 	ProductionLog bool
 }
 
-func loadEnv(projectDirName string) error {
-	projectName := regexp.MustCompile(`^(.*` + projectDirName + `)`)
-	currentWorkDirectory, _ := os.Getwd()
-	rootPath := projectName.Find([]byte(currentWorkDirectory))
-	err := godotenv.Load(string(rootPath) + `/.env`)
-	if err != nil {
-		return fmt.Errorf("error loading .env file")
-	}
-	return nil
-}
-
 func NewConfig() (*Config, error) {
 
 	var hostDb string
@@ -47,58 +37,65 @@ func NewConfig() (*Config, error) {
 		var exists bool
 		hostDb, exists = os.LookupEnv("DB_HOST_DOCKER")
 		if !exists {
-			return nil, fmt.Errorf("no .env str DB_HOST_DOCKER  found")
+			return nil, fmt.Errorf("no found DB_HOST_DOCKER")
 		}
 		hostGrpc, exists = os.LookupEnv("GRPC_HOST_DOCKER")
 		if !exists {
-			return nil, fmt.Errorf("no .env str GRPC_HOST_DOCKER  found")
+			return nil, fmt.Errorf("no found GRPC_HOST_DOCKER")
 		}
 
 	} else {
 		var exists bool
-		if err := loadEnv("feederapp"); err != nil {
+
+		if err := godotenv.Load(".env"); err != nil {
 			return nil, err
 		}
+
 		hostDb, exists = os.LookupEnv("DB_HOST_LOCAL")
 		if !exists {
-			return nil, fmt.Errorf("no .env str DB_HOST_LOCAL  found")
+			return nil, fmt.Errorf("no found DB_HOST_LOCAL")
 		}
 
 		hostGrpc, exists = os.LookupEnv("GRPC_HOST_LOCAL")
 		if !exists {
-			return nil, fmt.Errorf("no .env str GRPC_HOST_LOCAL  found")
+			return nil, fmt.Errorf("no found GRPC_HOST_LOCAL")
 		}
+	}
+
+	exchangeType, exists := os.LookupEnv("APP_EXCHANGE_FLOW_TYPE")
+	if !exists {
+		return nil, fmt.Errorf("no found APP_EXCHANGE_FLOW_TYPE")
 	}
 	// DB
 	nameDb, exists := os.LookupEnv("DB_NAME")
 	if !exists {
-		return nil, fmt.Errorf("no .env str DB_NAME found")
+		return nil, fmt.Errorf("no found DB_NAME")
 	}
 	passwordDb, exists := os.LookupEnv("DB_PASSWORD")
 	if !exists {
-		return nil, fmt.Errorf("no .env str DB_PASSWORD found")
+		return nil, fmt.Errorf("no found DB_PASSWORD")
 	}
 	portDb, exists := os.LookupEnv("DB_PORT")
 	if !exists {
-		return nil, fmt.Errorf("no .env str DB_PORT found")
+		return nil, fmt.Errorf("no found DB_PORT")
 	}
 
 	userDb, exists := os.LookupEnv("DB_USER")
 	if !exists {
-		return nil, fmt.Errorf("no .env str DB_USER found")
+		return nil, fmt.Errorf("no found DB_USER")
 	}
 
-	productionString, exists := os.LookupEnv("PRODUCTION_LOG")
+	productionString, exists := os.LookupEnv("LOG_PRODUCTION")
 	if !exists {
-		return nil, fmt.Errorf("no .env str PRODUCTION_LOG found")
+		return nil, fmt.Errorf("no found LOG_PRODUCTION")
 	}
 	if productionString == "true" {
 		production = true
 	}
 
-	debugString, exists := os.LookupEnv("DEBUG_LOG")
+	debugString, exists := os.LookupEnv("LOG_DEBUG")
 	if !exists {
-		return nil, fmt.Errorf("no .env str DEBUG_LOG found")
+		return nil, fmt.Errorf("no found LOG_DEBUG")
 	}
 	if debugString == "true" {
 		debug = true
@@ -106,7 +103,7 @@ func NewConfig() (*Config, error) {
 
 	grpcPort, exists := os.LookupEnv("GRPC_PORT")
 	if !exists {
-		return nil, fmt.Errorf("no .env str GRPC_PORT  found")
+		return nil, fmt.Errorf("no found GRPC_PORT")
 	}
 
 	c := &Config{
@@ -120,6 +117,8 @@ func NewConfig() (*Config, error) {
 
 		DebugLog:      debug,
 		ProductionLog: production,
+
+		ExchangeType: exchangeType,
 	}
 	return c, nil
 }

@@ -1,12 +1,11 @@
 version: '3.8'
 
 services:
-  feeder_app:
+  feeder-app:
     build:
       context: .
       args:
         GITHUB_TOKEN: ${GITHUB_TOKEN}
-        BUILD_TARGET: ${BUILD_TARGET:-exchange}
     volumes:
       - ./log:/app/log
     environment:
