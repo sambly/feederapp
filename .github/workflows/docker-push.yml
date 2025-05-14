@@ -34,6 +34,7 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
+            --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
             --build-arg VERSION=${{ steps.get_version.outputs.version }} \
             -t $IMAGE_NAME:latest \
             -t $IMAGE_NAME:${{ steps.get_version.outputs.version }} \
