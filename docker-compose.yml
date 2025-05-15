@@ -1,12 +1,13 @@
-version: '3.8'
+name: feeder-app-base
 
 services:
-  feeder_app:
+  feeder-app:
+    container_name: feeder-app
     build:
       context: .
       args:
         GITHUB_TOKEN: ${GITHUB_TOKEN}
-        BUILD_TARGET: ${BUILD_TARGET:-exchange}
+    image: sambly/feeder-app:${FEEDER_APP_TAG:-latest}  
     volumes:
       - ./log:/app/log
     environment:
@@ -14,9 +15,11 @@ services:
     env_file:
       - .env
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
 
   mysql:
+    container_name: mysql
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
@@ -25,6 +28,11 @@ services:
       - "${DB_PORT_HOST:-3307}:${DB_PORT:-3306}"
     volumes:
       - mysql_data:/var/lib/mysql
-
+    healthcheck:
+      test: ["CMD-SHELL", "mysql --silent -u root -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 100s   
 volumes:
   mysql_data:

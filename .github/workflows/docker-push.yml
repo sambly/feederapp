@@ -1,0 +1,50 @@
+name: Docker Build and Push (Versioned)
+
+on:
+  workflow_dispatch:  # Ручной запуск
+  push:
+    tags:
+      - 'v*.*.*'      # Автозапуск при пуше новых версионных тегов
+
+env:
+  DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_PASSWORD }}
+  IMAGE_NAME: 'sambly/feeder-app'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Необходимо для работы git describe
+
+      - name: Get latest version tag
+        id: get_version
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 --match "v*.*.*" || echo "v0.0.0")
+          echo "Detected version: $LATEST_TAG"
+          echo "version=${LATEST_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Login to Docker Hub
+        run: |
+          echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg GITHUB_TOKEN=${{ secrets.PRIVATE_REPO_TOKEN }} \
+            --build-arg VERSION=${{ steps.get_version.outputs.version }} \
+            -t $IMAGE_NAME:latest \
+            -t $IMAGE_NAME:${{ steps.get_version.outputs.version }} \
+            .
+
+      - name: Push to Docker Hub
+        run: |
+          docker push $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:${{ steps.get_version.outputs.version }}
+
+      - name: Show image metadata
+        run: |
+          docker inspect $IMAGE_NAME:latest --format='{{json .Config.Labels}}'

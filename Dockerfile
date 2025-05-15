@@ -1,22 +1,16 @@
 # Этап сборки
-FROM golang:1.22.5-alpine AS builder
+FROM golang:1.24.3-alpine AS builder
 
 # Установка необходимого для сборки
-RUN apk add --no-cache git make 
+RUN apk add --no-cache git 
 
 # Установка рабочей директории
 WORKDIR /app
 
 COPY go.mod go.sum ./
 
-# Установка переменных окружения как аргументов сборки
-ARG GITHUB_TOKEN
-ARG ENVIRONMENT
-ARG BUILD_TARGET=exchange
 
-# Установка переменных окружения
-ENV GOPRIVATE=github.com/sambly
-ENV GITHUB_TOKEN=${GITHUB_TOKEN}
+ARG GITHUB_TOKEN
 ENV ENVIRONMENT=docker
 
 # Настройка git с использованием переменной GITHUB_TOKEN
@@ -29,12 +23,11 @@ RUN go mod download
 COPY internal ./internal
 COPY cmd ./cmd
 
-RUN go build -o ./cmd/exchange/myFeederApp ./cmd/${BUILD_TARGET}
-
+RUN go build -o /app/fedder-app ./cmd
 
 
 # Минимальный финальный образ
-FROM alpine:3.18
+FROM alpine:3.21
 
 # Установка зависимостей для выполнения приложения
 RUN apk add --no-cache ca-certificates
@@ -47,12 +40,12 @@ RUN apk add --no-cache ca-certificates tzdata \
 
 
 # Устанавливаем рабочую директорию в контейнере
-WORKDIR /app/cmd/exchange
+WORKDIR /app
 
-COPY --from=builder /app/cmd/exchange/myFeederApp .
+COPY --from=builder /app/fedder-app .
 
 # Создание точки монтирования для логов
 VOLUME /app/log
 
 # Команда для запуска вашего приложения
-CMD ["./myFeederApp"]
+CMD ["./fedder-app"]

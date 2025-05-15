@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -15,11 +16,10 @@ import (
 	"github.com/sambly/feederapp/internal/app"
 	"github.com/sambly/feederapp/internal/config"
 	"github.com/sambly/feederapp/internal/database"
-	"github.com/sambly/feederapp/internal/model"
-
 	"github.com/sambly/feederapp/internal/logger"
-
+	"github.com/sambly/feederapp/internal/model"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -43,12 +43,12 @@ func main() {
 	mainLogger.Info("запуск приложения feeder-app")
 
 	periods := []model.Periods{
-		{Name: "ch1m", Duration: time.Second * 60},
-		{Name: "ch3m", Duration: time.Minute * 3},
-		{Name: "ch15m", Duration: time.Minute * 15},
-		{Name: "ch1h", Duration: time.Hour},
-		{Name: "ch4h", Duration: time.Hour * 4},
-		{Name: "ch12h", Duration: time.Hour * 12},
+		{Name: "1m", Duration: time.Second * 60},
+		{Name: "3m", Duration: time.Minute * 3},
+		{Name: "15m", Duration: time.Minute * 15},
+		{Name: "1h", Duration: time.Hour},
+		{Name: "4h", Duration: time.Hour * 4},
+		{Name: "1d", Duration: time.Hour * 12},
 	}
 
 	binance, err := exchange.NewBinance(ctx,
@@ -70,11 +70,26 @@ func main() {
 		mainLogger.Fatal(err)
 	}
 
+	var exflow exchange.Exflow
+	var conn *grpc.ClientConn
+	switch cfg.ExchangeType {
+	case "exchange":
+		exflow = binance
+	case "grpc":
+		exflow, conn, err = exchange.NewClientGrpc(
+			fmt.Sprintf("%s:%s", cfg.GrpcHost, cfg.GrpcPort),
+			exchange.WithClientLogger(logadapter.NewLogrusAdapter(logger.AddFieldsEmpty())),
+		)
+		if err != nil {
+			mainLogger.Fatalf("did not connect to grpc: %v", err)
+		}
+		defer conn.Close()
+	}
+
 	dataFeed := exchange.NewDataFeed(
-		binance,
+		exflow,
 		exchange.WithDataFeedLogger(logadapter.NewLogrusAdapter(logger.AddFieldsEmpty())),
 	)
-
 	if err != nil {
 		mainLogger.Fatalf("failed to initialize data feed: %v", err)
 	}
@@ -90,10 +105,13 @@ func main() {
 		return app.Run(gCtx)
 	})
 
+	fmt.Println("Приложение feeder-app запушено")
+
 	if err := g.Wait(); err != nil && gCtx.Err() != context.Canceled {
 		mainLogger.Fatalf("приложение feeder-app завершено с ошибкой: %v", err)
 	} else {
 		mainLogger.Info("приложение feeder-app завершено")
 	}
 
+	fmt.Println("Приложение feeder-app завершено")
 }
