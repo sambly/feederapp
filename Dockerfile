@@ -30,10 +30,6 @@ RUN go build -o /app/fedder-app ./cmd
 FROM alpine:3.21
 
 # Установка зависимостей для выполнения приложения
-RUN apk add --no-cache ca-certificates
-
-
-# Установка зависимостей для выполнения приложения
 RUN apk add --no-cache ca-certificates tzdata \
     && ln -sf /usr/share/zoneinfo/Europe/Moscow /etc/localtime \
     && echo "Europe/Moscow" > /etc/timezone

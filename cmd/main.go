@@ -108,9 +108,9 @@ func main() {
 	fmt.Println("Приложение feeder-app запушено")
 
 	if err := g.Wait(); err != nil && gCtx.Err() != context.Canceled {
-		mainLogger.Fatalf("приложение feeder-app завершено с ошибкой: %v", err)
+		mainLogger.Fatalf("Приложение feeder-app завершено с ошибкой: %v", err)
 	} else {
-		mainLogger.Info("приложение feeder-app завершено")
+		mainLogger.Info("Приложение feeder-app завершено")
 	}
 
 	fmt.Println("Приложение feeder-app завершено")

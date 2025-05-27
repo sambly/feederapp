@@ -9,7 +9,7 @@
 `docker build --build-arg GITHUB_TOKEN=<your_github_token> -t sambly/feeder-app .`
 - Запуск контейнера Docker: Эта команда запускает контейнер из образа в интерактивном режиме (-it). Флаг --rm удаляет контейнер после его остановки.
 `docker run --rm -it sambly/feeder-app`
--Отправить docker в docker-hub
+- Отправить docker в docker-hub
 `docker push sambly/feeder-app:latest`
 
 ## docker-compose

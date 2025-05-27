@@ -22,10 +22,10 @@ services:
     container_name: mysql
     image: mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_ROOT_PASSWORD: ${FEEDER_DB_PASSWORD}
+      MYSQL_DATABASE: ${FEEDER_DB_NAME}
     ports:
-      - "${DB_PORT_HOST:-3307}:${DB_PORT:-3306}"
+      - "${FEEDER_DB_PORT_HOST:-3307}:${FEEDER_DB_PORT:-3306}"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
