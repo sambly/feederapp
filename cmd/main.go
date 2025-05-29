@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"net/http"
 	_ "net/http/pprof"
 
 	"github.com/sambly/exchangeService/pkg/exchange"
@@ -26,6 +28,10 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	var serviceReady bool
+	httpReady := make(chan struct{})
+	appReady := make(chan struct{})
 
 	cfg, err := config.NewConfig()
 	if err != nil {
@@ -102,16 +108,68 @@ func main() {
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
+		// TODO
+		close(appReady)
 		return app.Run(gCtx)
 	})
 
-	fmt.Println("Приложение feeder-app запушено")
+	// HTTP сервер
+	g.Go(func() error {
+		if cfg.HTTPPort == "" {
+			close(httpReady)
+			mainLogger.Info("HTTP healthcheck server disabled (no port specified)")
+			return nil
+		}
 
-	if err := g.Wait(); err != nil && gCtx.Err() != context.Canceled {
-		mainLogger.Fatalf("Приложение feeder-app завершено с ошибкой: %v", err)
-	} else {
-		mainLogger.Info("Приложение feeder-app завершено")
+		httpServer := &http.Server{
+			Addr: ":" + cfg.HTTPPort,
+		}
+		// Готовность компонента
+		close(httpReady)
+
+		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			if serviceReady {
+				w.WriteHeader(http.StatusOK)
+			} else {
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}
+		})
+		// shutdown
+		go func() {
+			<-gCtx.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := httpServer.Shutdown(ctx); err != nil {
+				mainLogger.Warn("HTTP shutdown error", err)
+			}
+		}()
+		return httpServer.ListenAndServe()
+	})
+
+	g.Go(func() error {
+		select {
+		case <-httpReady:
+			mainLogger.Debug("HTTP сервер готов")
+		case <-gCtx.Done():
+			return gCtx.Err()
+		}
+
+		select {
+		case <-appReady:
+			mainLogger.Debug("app ready")
+		case <-gCtx.Done():
+			return gCtx.Err()
+		}
+
+		serviceReady = true
+		mainLogger.Info("Приложение feeder-app запушено")
+		fmt.Println("Приложение feeder-app запушено")
+		return nil
+	})
+
+	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		mainLogger.Errorf("feeder-app error: %v", err)
 	}
-
+	mainLogger.Info("Приложение feeder-app завершено")
 	fmt.Println("Приложение feeder-app завершено")
 }

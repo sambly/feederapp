@@ -22,6 +22,9 @@ type Config struct {
 	GrpcHost string
 	GrpcPort string
 
+	// HTTP
+	HTTPPort string
+
 	// Log
 	DebugLog      bool
 	ProductionLog bool
@@ -113,6 +116,10 @@ func NewConfig() (*Config, error) {
 	if !exists {
 		return nil, fmt.Errorf("no found GRPC_PORT")
 	}
+	httpPort, exists := getEnv("HTTP_PORT_HEALTH")
+	if !exists {
+		return nil, fmt.Errorf("no found HTTP_PORT_HEALTH")
+	}
 
 	c := &Config{
 		NameDb:     nameDb,
@@ -123,6 +130,7 @@ func NewConfig() (*Config, error) {
 		GrpcHost:   hostGrpc,
 		GrpcPort:   grpcPort,
 
+		HTTPPort:      httpPort,
 		DebugLog:      debug,
 		ProductionLog: production,
 
