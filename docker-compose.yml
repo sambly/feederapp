@@ -12,6 +12,7 @@ services:
       - ./log:/app/log
     environment:
       ENVIRONMENT: docker
+      FEEDER_HTTP_PORT_HEALTH: ${FEEDER_HTTP_PORT_HEALTH:-8080}     
     env_file:
       - .env
     depends_on:

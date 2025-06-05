@@ -116,10 +116,7 @@ func NewConfig() (*Config, error) {
 	if !exists {
 		return nil, fmt.Errorf("no found GRPC_PORT")
 	}
-	httpPort, exists := getEnv("HTTP_PORT_HEALTH")
-	if !exists {
-		return nil, fmt.Errorf("no found HTTP_PORT_HEALTH")
-	}
+	httpPort, _ := getEnv("HTTP_PORT_HEALTH")
 
 	c := &Config{
 		NameDb:     nameDb,
