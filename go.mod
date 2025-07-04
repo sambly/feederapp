@@ -12,7 +12,7 @@ require (
 )
 
 require (
-	github.com/sambly/exchangeService v1.4.6
+	github.com/sambly/exchangeService v1.4.11
 	github.com/sirupsen/logrus v1.9.3
 	google.golang.org/grpc v1.67.1
 	gorm.io/driver/mysql v1.5.7
