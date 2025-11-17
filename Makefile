@@ -95,3 +95,11 @@ compare-all-envs:
 			dotenv-linter compare $$dir/.env $$dir/.env.example || true; \
 		fi \
 	done
+
+# Создание и отправка Git-тега
+.PHONY: tag
+tag:
+	@if [ -z "$(version)" ]; then echo "Error: version is not set. Usage: make tag version=v1.1.1"; exit 1; fi
+	@echo "Creating and pushing tag $(version)..."
+	git tag -a $(version) -m "$(version)"
+	git push origin $(version)
