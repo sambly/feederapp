@@ -95,6 +95,7 @@ func main() {
 	dataFeed := exchange.NewDataFeed(
 		exflow,
 		exchange.WithDataFeedLogger(logadapter.NewLogrusAdapter(logger.AddFieldsEmpty())),
+		exchange.WithTradeFeed(),
 	)
 	if err != nil {
 		mainLogger.Fatalf("failed to initialize data feed: %v", err)
