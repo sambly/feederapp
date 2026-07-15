@@ -54,7 +54,7 @@ func main() {
 		{Name: "15m", Duration: time.Minute * 15},
 		{Name: "1h", Duration: time.Hour},
 		{Name: "4h", Duration: time.Hour * 4},
-		{Name: "1d", Duration: time.Hour * 12},
+		{Name: "12h", Duration: time.Hour * 12},
 	}
 
 	binance, err := exchange.NewBinance(ctx,
@@ -113,6 +113,12 @@ func main() {
 		close(appReady)
 		return app.Run(gCtx)
 	})
+
+	if cfg.BackfillEnabled {
+		g.Go(func() error {
+			return app.RunBackfill(gCtx, cfg.BackfillThreshold, cfg.BackfillWorkers)
+		})
+	}
 
 	// HTTP сервер
 	g.Go(func() error {

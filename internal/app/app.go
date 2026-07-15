@@ -47,23 +47,49 @@ func NewApp(dataFeed *exchange.DataFeed, db *gorm.DB, pairs []string, periods []
 }
 
 func (app *Application) Run(ctx context.Context) error {
-	timeStart := time.Now().Truncate(time.Minute)
-	timeStart = timeStart.Add(time.Minute)
 
 	for _, pair := range app.pairs {
-
 		if _, ok := app.candles[pair]; !ok {
 			app.candles[pair] = map[string]*exModel.Candle{}
 		}
+	}
+
+	// Восстанавливаем текущий (ещё не закрытый) бакет каждой пары/периода из истории
+	// биржи, прежде чем подписываться на live-трейды — иначе рестарт посреди накопления
+	// крупной свечи (например, 4h) обнулял бы её в памяти. Идёт параллельно по всем
+	// парам/периодам; реальная конкурентность ограничена общим весовым лимитером на
+	// стороне exchangeService, поэтому отдельный пул воркеров тут не нужен.
+	// Периоды короче seedMinPeriod не сидируются: полный сидинг всех пар через весовой
+	// лимитер занимает минуты, и для мелких периодов seed протухает быстрее, чем
+	// успевает примениться — потеря ограничена одним бакетом.
+	seedGroup, seedCtx := errgroup.WithContext(ctx)
+	for _, pair := range app.pairs {
 		for _, period := range app.periods {
-			nextTime := findNextMultipleTime(timeStart, period.Duration)
-			app.candles[pair][period.Name] = &exModel.Candle{Pair: pair, Time: nextTime}
+			if period.Duration < seedMinPeriod {
+				app.mtx.Lock()
+				app.candles[pair][period.Name] = coldStartCandle(pair, period)
+				app.mtx.Unlock()
+				continue
+			}
+			pair, period := pair, period
+			seedGroup.Go(func() error {
+				seeded := app.seedCandle(seedCtx, pair, period)
+				app.mtx.Lock()
+				app.candles[pair][period.Name] = seeded
+				app.mtx.Unlock()
+				return nil
+			})
 		}
+	}
+	if err := seedGroup.Wait(); err != nil {
+		return err
+	}
+
+	for _, pair := range app.pairs {
 		app.dataFeed.SubscribeTrade(pair)
 		app.dataFeed.SubscribeObserverTrade(ctx, "FeederApp", pair, func(trade exModel.Trade) {
 			app.onTrade(ctx, trade)
 		})
-
 	}
 
 	for _, period := range app.periods {
@@ -115,7 +141,10 @@ func (app *Application) onTrade(ctx context.Context, trade exModel.Trade) {
 
 		difTime := trade.Time.Sub(candle.Time)
 
-		if difTime >= time.Duration(period.Duration) {
+		// Цикл (а не if): свеча могла отстать более чем на один период — например,
+		// после реконнекта без трейдов или из-за протухшего seed — и без догона
+		// трейд записался бы в бакет с чужой временной меткой.
+		for difTime >= time.Duration(period.Duration) {
 			// Запускаем таймер для полной записи всех пар
 			if !app.trigerTimer[period.Name] {
 				app.onTimer(ctx, period)
@@ -218,6 +247,10 @@ func (app *Application) WriteTradeDatabase(ctx context.Context, period iModel.Pe
 			err := database.InsertCandles(app.database, candles, period.Name)
 			if err != nil {
 				appLogger.Errorf("error app.WriteTradeDatabase: %v", err)
+			} else if period.Name == "1m" {
+				if err := database.UpdateHeartbeat(app.database, time.Now()); err != nil {
+					appLogger.Errorf("error app.WriteTradeDatabase: update heartbeat: %v", err)
+				}
 			}
 			duration := time.Since(start)
 			appLogger.Infof("t:%v  period %s ", duration, period.Name)
@@ -230,6 +263,72 @@ func (app *Application) SetTrigerTimer(period iModel.Periods, value bool) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 	app.trigerTimer[period.Name] = value
+}
+
+// seedMinPeriod — периоды короче этого не сидируются из истории: полный сидинг
+// всех пар через весовой лимитер занимает минуты, и для мелких периодов seed
+// протухает быстрее, чем успевает примениться. Потеря ограничена одним бакетом.
+const seedMinPeriod = 15 * time.Minute
+
+// coldStartCandle — прежнее поведение холодного старта: пустая свеча с началом на
+// следующей полной границе периода (накопление начнётся только с этой границы).
+func coldStartCandle(pair string, period iModel.Periods) *exModel.Candle {
+	timeStart := time.Now().Truncate(time.Minute).Add(time.Minute)
+	nextTime := findNextMultipleTime(timeStart, period.Duration)
+	return &exModel.Candle{Pair: pair, Time: nextTime}
+}
+
+// seedCandle восстанавливает текущий, ещё не закрытый бакет свечи для пары/периода из
+// истории биржи (через exchangeService/dataFeed), чтобы рестарт не обнулял то, что уже
+// было накоплено с начала бакета — критично для крупных периодов (1h/4h/12h), где иначе
+// терялись бы часы объёма и трейдов. Время берётся в момент вызова (не общий now на все
+// пары): сидинг сотен пар через весовой лимитер занимает минуты, общий now протухал бы.
+// Если данных нет (например, самый первый бакет пары с начала торгов, или сеть
+// недоступна) — откатывается к прежнему поведению холодного старта.
+func (app *Application) seedCandle(ctx context.Context, pair string, period iModel.Periods) *exModel.Candle {
+	now := time.Now()
+	bucketStart := now.Truncate(period.Duration)
+
+	candlesChan, errChan := app.dataFeed.HistoricalCandles(ctx, pair, period.Name, bucketStart, now)
+
+	var seed *exModel.Candle
+loop:
+	for {
+		select {
+		case candle, ok := <-candlesChan:
+			if !ok {
+				break loop
+			}
+			c := candle
+			seed = &c
+		case err, ok := <-errChan:
+			if !ok {
+				errChan = nil
+				continue
+			}
+			if err != nil {
+				appLogger.Errorf("seed candle: pair %s period %s: %v", pair, period.Name, err)
+			}
+		case <-ctx.Done():
+			break loop
+		}
+	}
+
+	// Дочитываем ошибку, которую select мог не успеть прочитать до закрытия candlesChan.
+	if errChan != nil {
+		if err, ok := <-errChan; ok && err != nil {
+			appLogger.Errorf("seed candle: pair %s period %s: %v", pair, period.Name, err)
+		}
+	}
+
+	if seed == nil {
+		return coldStartCandle(pair, period)
+	}
+
+	seed.Pair = pair
+	seed.Time = bucketStart
+	seed.StartT = true
+	return seed
 }
 
 func findNextMultipleTime(t time.Time, interval time.Duration) time.Time {

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -28,7 +30,17 @@ type Config struct {
 	// Log
 	DebugLog      bool
 	ProductionLog bool
+
+	// Backfill пропущенных свечей при старте после простоя
+	BackfillEnabled   bool
+	BackfillThreshold time.Duration
+	BackfillWorkers   int
 }
+
+const (
+	defaultBackfillThreshold = 2 * time.Minute
+	defaultBackfillWorkers   = 3
+)
 
 var envPrefix = "FEEDER"
 
@@ -118,6 +130,29 @@ func NewConfig() (*Config, error) {
 	}
 	httpPort, _ := getEnv("HTTP_PORT_HEALTH")
 
+	backfillEnabled := true
+	if v, exists := getEnv("BACKFILL_ENABLED"); exists && v != "" {
+		backfillEnabled = v == "true"
+	}
+
+	backfillThreshold := defaultBackfillThreshold
+	if v, exists := getEnv("BACKFILL_THRESHOLD_SECONDS"); exists && v != "" {
+		seconds, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid BACKFILL_THRESHOLD_SECONDS: %w", err)
+		}
+		backfillThreshold = time.Duration(seconds) * time.Second
+	}
+
+	backfillWorkers := defaultBackfillWorkers
+	if v, exists := getEnv("BACKFILL_WORKERS"); exists && v != "" {
+		workers, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid BACKFILL_WORKERS: %w", err)
+		}
+		backfillWorkers = workers
+	}
+
 	c := &Config{
 		NameDb:     nameDb,
 		PasswordDb: passwordDb,
@@ -132,6 +167,10 @@ func NewConfig() (*Config, error) {
 		ProductionLog: production,
 
 		ExchangeType: exchangeType,
+
+		BackfillEnabled:   backfillEnabled,
+		BackfillThreshold: backfillThreshold,
+		BackfillWorkers:   backfillWorkers,
 	}
 	return c, nil
 }

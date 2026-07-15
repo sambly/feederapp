@@ -43,5 +43,16 @@ COPY --from=builder /app/fedder-app .
 # Создание точки монтирования для логов
 VOLUME /app/log
 
+# Build arguments and OCI-standard labels for versioning
+ARG VERSION=unknown
+ARG COMMIT_HASH=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.created=${BUILD_DATE}
+LABEL org.opencontainers.image.revision=${COMMIT_HASH}
+LABEL org.opencontainers.image.version=${VERSION}
+LABEL org.opencontainers.image.title="feeder-app"
+LABEL org.opencontainers.image.description="Feeder app"
+
 # Команда для запуска вашего приложения
 CMD ["./fedder-app"]

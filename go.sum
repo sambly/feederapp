@@ -51,8 +51,8 @@ github.com/prometheus/common v0.62.0 h1:xasJaQlnWAeyHdUBeGjXmutelfJHWMRr+Fg4QszZ
 github.com/prometheus/common v0.62.0/go.mod h1:vyBcEuLSvWos9B1+CyL7JZ2up+uFzXhkqml0W5zIY1I=
 github.com/prometheus/procfs v0.15.1 h1:YagwOFzUgYfKKHX6Dr+sHT7km/hxC76UB0learggepc=
 github.com/prometheus/procfs v0.15.1/go.mod h1:fB45yRUv8NstnjriLhBQLuOUt+WW4BsoGhij/e3PBqk=
-github.com/sambly/exchangeService v1.5.0 h1:pU+lSw2O9EaVxMjtdyDToJk+zKsRMNKbxeAFIBW+iXA=
-github.com/sambly/exchangeService v1.5.0/go.mod h1:0sJQDOWcS2P/7qProbnzer/3JyZqFZL+nwcwaUu/MEo=
+github.com/sambly/exchangeService v1.5.2 h1:ahu5sg7lfcapZIGdCu7Spv+XV+wbzYmUBdEo+Ks02jA=
+github.com/sambly/exchangeService v1.5.2/go.mod h1:0sJQDOWcS2P/7qProbnzer/3JyZqFZL+nwcwaUu/MEo=
 github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
 github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+DMd9qYNcwME=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
