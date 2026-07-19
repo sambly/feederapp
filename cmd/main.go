@@ -57,40 +57,50 @@ func main() {
 		{Name: "12h", Duration: time.Hour * 12},
 	}
 
-	binance, err := exchange.NewBinance(ctx,
-		exchange.WithBinanceLogger(logadapter.NewLogrusAdapter(logger.AddFieldsEmpty())),
-	)
-	if err != nil {
-		mainLogger.Fatalf("failed to create exchange instance: %v", err)
-	}
-
-	pairs, err := binance.GetPairsToUSDT(ctx)
-	if err != nil {
-		mainLogger.Fatal(err)
-	}
-
-	mainLogger.Infof("колличество пар: %v", len(pairs))
-
 	db, err := database.DbInit(cfg.NameDb, cfg.HostDb, cfg.PortDb, cfg.UserDb, cfg.PasswordDb)
 	if err != nil {
 		mainLogger.Fatal(err)
 	}
 
+	// Источник данных и список пар определяются режимом: в grpc-режиме и то и другое
+	// берётся у exchangeService (Binance-клиент вообще не создаётся), в exchange-режиме —
+	// напрямую с биржи. Пары берём из того же источника, что и поток, чтобы наборы совпадали.
 	var exflow exchange.Exflow
 	var conn *grpc.ClientConn
+	var pairs []string
 	switch cfg.ExchangeType {
 	case "exchange":
+		binance, err := exchange.NewBinance(ctx,
+			exchange.WithBinanceLogger(logadapter.NewLogrusAdapter(logger.AddFieldsEmpty())),
+		)
+		if err != nil {
+			mainLogger.Fatalf("failed to create exchange instance: %v", err)
+		}
 		exflow = binance
+		pairs, err = binance.GetPairsToUSDT(ctx)
+		if err != nil {
+			mainLogger.Fatal(err)
+		}
 	case "grpc":
-		exflow, conn, err = exchange.NewClientGrpc(
+		client, c, err := exchange.NewClientGrpc(
 			fmt.Sprintf("%s:%s", cfg.GrpcHost, cfg.GrpcPort),
 			exchange.WithClientLogger(logadapter.NewLogrusAdapter(logger.AddFieldsEmpty())),
 		)
 		if err != nil {
 			mainLogger.Fatalf("did not connect to grpc: %v", err)
 		}
+		conn = c
 		defer conn.Close()
+		exflow = client
+		pairs, err = client.GetPairsToUSDT(ctx)
+		if err != nil {
+			mainLogger.Fatalf("failed to get pairs from exchange-service: %v", err)
+		}
+	default:
+		mainLogger.Fatalf("unknown exchange type: %q", cfg.ExchangeType)
 	}
+
+	mainLogger.Infof("колличество пар: %v", len(pairs))
 
 	dataFeed := exchange.NewDataFeed(
 		exflow,

@@ -28,6 +28,15 @@ type Application struct {
 	candles       map[string]map[string]*exModel.Candle
 	candlesBuffer map[string][]exModel.Candle
 	trigerTimer   map[string]bool
+
+	// healOnClose[pair][period] — бакет был сидирован из истории при старте.
+	// Между seed-снапшотом и фактическим началом live-подписки проходят минуты
+	// (сидинг сотен пар идёт через весовой лимитер), и трейды этого окна не видит
+	// ни seed, ни live — свеча закрылась бы с недобором. Поэтому при закрытии
+	// такого бакета перезапрашиваем его финальный kline с биржи и апсертим
+	// поверх live-агрегата (authoritative-значения; amount_trade_buy защищён
+	// GREATEST в candleConflictClause). Защищено app.mtx.
+	healOnClose map[string]map[string]bool
 }
 
 func NewApp(dataFeed *exchange.DataFeed, db *gorm.DB, pairs []string, periods []iModel.Periods) (*Application, error) {
@@ -42,6 +51,7 @@ func NewApp(dataFeed *exchange.DataFeed, db *gorm.DB, pairs []string, periods []
 		candles:       make(map[string]map[string]*exModel.Candle),
 		candlesBuffer: make(map[string][]exModel.Candle),
 		trigerTimer:   make(map[string]bool),
+		healOnClose:   make(map[string]map[string]bool),
 	}
 	return app, nil
 }
@@ -76,6 +86,14 @@ func (app *Application) Run(ctx context.Context) error {
 				seeded := app.seedCandle(seedCtx, pair, period)
 				app.mtx.Lock()
 				app.candles[pair][period.Name] = seeded
+				// StartT=true только у реально сидированной свечи (не cold-start):
+				// именно её при закрытии надо перечитать с биржи (см. healOnClose).
+				if seeded.StartT {
+					if app.healOnClose[pair] == nil {
+						app.healOnClose[pair] = make(map[string]bool)
+					}
+					app.healOnClose[pair][period.Name] = true
+				}
 				app.mtx.Unlock()
 				return nil
 			})
@@ -149,7 +167,7 @@ func (app *Application) onTrade(ctx context.Context, trade exModel.Trade) {
 			if !app.trigerTimer[period.Name] {
 				app.onTimer(ctx, period)
 			}
-			app.WriteTrade(candle, period)
+			app.WriteTrade(ctx, candle, period)
 			difTime = trade.Time.Sub(candle.Time)
 
 		}
@@ -191,7 +209,9 @@ func (app *Application) WriteCandleBuffer(candle exModel.Candle, period iModel.P
 	app.candlesBuffer[period.Name] = append(app.candlesBuffer[period.Name], candle)
 }
 
-func (app *Application) WriteTrade(candle *exModel.Candle, period iModel.Periods) {
+func (app *Application) WriteTrade(ctx context.Context, candle *exModel.Candle, period iModel.Periods) {
+
+	closedStart := candle.Time // начало закрывающегося бакета — для heal-on-close
 
 	candle.Time = candle.Time.Add(period.Duration)
 	candle.CompleteTrade = true
@@ -199,6 +219,14 @@ func (app *Application) WriteTrade(candle *exModel.Candle, period iModel.Periods
 	candle.StartT = false
 
 	app.WriteCandleBuffer(*candle, period)
+
+	// Сидированный бакет закрылся: live-агрегат неполон (окно между seed и началом
+	// подписки), перечитываем финальный kline с биржи в фоне. Флаг снимается сразу —
+	// heal нужен ровно один раз, для первого закрытия после старта.
+	if periods := app.healOnClose[candle.Pair]; periods != nil && periods[period.Name] {
+		delete(periods, period.Name)
+		go app.healClosedBucket(ctx, candle.Pair, period, closedStart)
+	}
 
 	// Reset candle fields
 	//*candle = model.Candle{Pair: candle.Pair, Time: candle.Time} // todo
@@ -224,7 +252,7 @@ func (app *Application) UpdateCandlesTriger(ctx context.Context, period iModel.P
 	for _, pair := range app.pairs {
 		candle := app.candles[pair][period.Name]
 		if !candle.CompleteTrade {
-			app.WriteTrade(candle, period)
+			app.WriteTrade(ctx, candle, period)
 
 		}
 		candle.CompleteTrade = false
@@ -253,7 +281,7 @@ func (app *Application) WriteTradeDatabase(ctx context.Context, period iModel.Pe
 				}
 			}
 			duration := time.Since(start)
-			appLogger.Infof("t:%v  period %s ", duration, period.Name)
+			appLogger.Debugf("t:%v  period %s ", duration, period.Name)
 		}
 	}(ctx)
 	app.candlesBuffer[period.Name] = []exModel.Candle{}
@@ -331,14 +359,82 @@ loop:
 	return seed
 }
 
+// findNextMultipleTime возвращает ближайшую границу интервала >= t. Бакет,
+// начинающийся на этой границе, будет накоплен с самого начала (t — уже будущая
+// граница минуты относительно старта), поэтому дополнительный интервал ожидания
+// не нужен: раньше он безусловно добавлялся и терял один полный закрытый бакет
+// каждого мелкого периода на каждом рестарте (для 1m — до 2-3 минутных свечей).
+// healClosedBucket перечитывает с биржи финальный kline закрывшегося сидированного
+// бакета и апсертит его поверх live-агрегата. Live-агрегат для такого бакета неполон:
+// сидинг сотен пар через весовой лимитер занимает минуты, и трейды между seed-снапшотом
+// пары и фактическим стартом подписки не учтены нигде. Kline биржи — authoritative
+// для всех полей, кроме amount_trade_buy (в klines его нет, у heal-строки он 0) —
+// live-значение этого поля защищено GREATEST в candleConflictClause.
+func (app *Application) healClosedBucket(ctx context.Context, pair string, period iModel.Periods, bucketStart time.Time) {
+	// Даём бирже финализировать kline только что закрывшегося бакета.
+	select {
+	case <-time.After(5 * time.Second):
+	case <-ctx.Done():
+		return
+	}
+
+	end := bucketStart.Add(period.Duration)
+	candlesChan, errChan := app.dataFeed.HistoricalCandles(ctx, pair, period.Name, bucketStart, end)
+
+	// Binance включает в выборку и kline с openTime == end (следующий, открытый) —
+	// берём строго свечу нашего бакета.
+	var final *exModel.Candle
+loop:
+	for {
+		select {
+		case candle, ok := <-candlesChan:
+			if !ok {
+				break loop
+			}
+			if candle.Time.Equal(bucketStart) {
+				c := candle
+				final = &c
+			}
+		case err, ok := <-errChan:
+			if !ok {
+				errChan = nil
+				continue
+			}
+			if err != nil {
+				appLogger.Errorf("heal-on-close: pair %s period %s: %v", pair, period.Name, err)
+				return
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+	if errChan != nil {
+		if err, ok := <-errChan; ok && err != nil {
+			appLogger.Errorf("heal-on-close: pair %s period %s: %v", pair, period.Name, err)
+			return
+		}
+	}
+
+	if final == nil {
+		appLogger.Warnf("heal-on-close: pair %s period %s: no kline for bucket %s", pair, period.Name, bucketStart)
+		return
+	}
+
+	final.Pair = pair
+	final.Time = bucketStart
+	if err := database.InsertCandle(app.database, *final, period.Name); err != nil {
+		appLogger.Errorf("heal-on-close: pair %s period %s insert: %v", pair, period.Name, err)
+		return
+	}
+	appLogger.Infof("heal-on-close: pair %s period %s bucket %s healed (trades=%d)", pair, period.Name, bucketStart, final.AmountTrade)
+}
+
 func findNextMultipleTime(t time.Time, interval time.Duration) time.Time {
-	// Находим ближайшее время, которое кратно интервалу, начиная с t
 	remainder := t.Unix() % int64(interval.Seconds())
 	if remainder != 0 {
 		seconds := int64(interval.Seconds())
-		// Добавляем оставшееся время до следующего кратного интервала
+		// Поднимаем к следующей границе, кратной интервалу
 		t = t.Add(time.Duration(seconds-remainder) * time.Second)
-		// Добавляем этот же период времени, так как нужно дождаться чтобы все данные успели сформироваться
 	}
-	return t.Add(interval)
+	return t
 }

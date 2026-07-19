@@ -87,17 +87,27 @@ func UpdateHeartbeat(db *gorm.DB, t time.Time) error {
 // candleUpsertColumns — что перезаписывать при конфликте по (pair, time). Нужно, чтобы
 // повторная докачка бэкофилла (например, после краша посреди него) не падала на дублях
 // и не плодила лишние строки, а просто обновляла уже существующую свечу.
+//
+// amount_trade_buy здесь НЕТ намеренно: klines Binance не отдают число тейкер-buy
+// сделок, поэтому у backfill/heal-строк это поле всегда 0. Слепая перезапись затирала
+// бы корректные live-значения нулями на всём 12h-окне бэкофилла при каждом рестарте.
+// Вместо этого — GREATEST: live-значение (>0) выживает, а 0 из бэкофилла — нет.
 var candleUpsertColumns = []string{
 	"open", "close", "low", "high",
 	"volume", "quote_volume",
-	"amount_trade", "amount_trade_buy",
+	"amount_trade",
 	"active_buy_volume", "active_buy_quote_volume",
 }
 
 func candleConflictClause() clause.OnConflict {
+	assignments := map[string]interface{}{}
+	for _, col := range candleUpsertColumns {
+		assignments[col] = gorm.Expr(fmt.Sprintf("VALUES(%s)", col))
+	}
+	assignments["amount_trade_buy"] = gorm.Expr("GREATEST(amount_trade_buy, VALUES(amount_trade_buy))")
 	return clause.OnConflict{
 		Columns:   []clause.Column{{Name: "pair"}, {Name: "time"}},
-		DoUpdates: clause.AssignmentColumns(candleUpsertColumns),
+		DoUpdates: clause.Assignments(assignments),
 	}
 }
 
