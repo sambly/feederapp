@@ -29,13 +29,17 @@ type Application struct {
 	candlesBuffer map[string][]exModel.Candle
 	trigerTimer   map[string]bool
 
-	// healOnClose[pair][period] — бакет был сидирован из истории при старте.
-	// Между seed-снапшотом и фактическим началом live-подписки проходят минуты
-	// (сидинг сотен пар идёт через весовой лимитер), и трейды этого окна не видит
-	// ни seed, ни live — свеча закрылась бы с недобором. Поэтому при закрытии
-	// такого бакета перезапрашиваем его финальный kline с биржи и апсертим
-	// поверх live-агрегата (authoritative-значения; amount_trade_buy защищён
-	// GREATEST в candleConflictClause). Защищено app.mtx.
+	// healOnClose[pair][period] — первый после старта бакет пары/периода помечен
+	// на перепроверку по закрытию (и для сидированных из истории, и для
+	// cold-started — см. Run). Между назначением candle.Time и фактическим стартом
+	// live-подписки проходит время (сидинг сотен пар через общий весовой лимитер
+	// занимает минуты), трейды этого окна не видит ни seed/cold-start, ни live —
+	// свеча закрылась бы с недобором (для cold-start — вообще нулями, см. catch-up
+	// цикл в onTrade). Поэтому при первом закрытии такого бакета перезапрашиваем
+	// его финальный kline с биржи и апсертим поверх live-агрегата (authoritative-
+	// значения; amount_trade_buy защищён GREATEST в candleConflictClause).
+	// Флаг разовый: снимается сразу при первом использовании в WriteTrade.
+	// Защищено app.mtx.
 	healOnClose map[string]map[string]bool
 }
 
@@ -71,14 +75,15 @@ func (app *Application) Run(ctx context.Context) error {
 	// стороне exchangeService, поэтому отдельный пул воркеров тут не нужен.
 	// Периоды короче seedMinPeriod не сидируются: полный сидинг всех пар через весовой
 	// лимитер занимает минуты, и для мелких периодов seed протухает быстрее, чем
-	// успевает примениться — потеря ограничена одним бакетом.
+	// успевает примениться — потеря ограничена одним бакетом. Их coldStartCandle
+	// назначается отдельным циклом ниже, после seedGroup.Wait() (см. комментарий там).
 	seedGroup, seedCtx := errgroup.WithContext(ctx)
 	for _, pair := range app.pairs {
 		for _, period := range app.periods {
 			if period.Duration < seedMinPeriod {
-				app.mtx.Lock()
-				app.candles[pair][period.Name] = coldStartCandle(pair, period)
-				app.mtx.Unlock()
+				// coldStartCandle назначается ПОСЛЕ этого цикла, см. ниже —
+				// иначе её Time отсчитывался бы от начала Run(), а не от
+				// момента, когда реально стартует live-подписка.
 				continue
 			}
 			pair, period := pair, period
@@ -89,10 +94,7 @@ func (app *Application) Run(ctx context.Context) error {
 				// StartT=true только у реально сидированной свечи (не cold-start):
 				// именно её при закрытии надо перечитать с биржи (см. healOnClose).
 				if seeded.StartT {
-					if app.healOnClose[pair] == nil {
-						app.healOnClose[pair] = make(map[string]bool)
-					}
-					app.healOnClose[pair][period.Name] = true
+					app.markHealOnClose(pair, period.Name)
 				}
 				app.mtx.Unlock()
 				return nil
@@ -101,6 +103,29 @@ func (app *Application) Run(ctx context.Context) error {
 	}
 	if err := seedGroup.Wait(); err != nil {
 		return err
+	}
+
+	// Мелкие периоды (1m/3m) не сидируются историей (см. seedMinPeriod), поэтому их
+	// coldStartCandle обязан отсчитываться от времени, БЛИЗКОГО к фактическому старту
+	// live-подписки (следующий цикл), а не от начала Run(): сидинг ~460 пар × 4
+	// периода через общий весовой лимитер exchangeService занимает ~10-15 минут (см.
+	// seedGroup.Wait() выше). Если бы candle.Time ставилось до сидинга, первый же
+	// live-трейд обнаруживал бы "устаревший" на ~13 минут бакет, onTrade прогонял бы
+	// catch-up цикл (см. ниже) и записал бы в БД пачку ПУСТЫХ (все поля 0) минутных
+	// свечей за всё время сидирования — именно так и происходило: наблюдалось как
+	// "candles_1m забита нулями" сразу после restart. healOnClose помечается и для
+	// этих периодов — страховка на случай остаточной небольшой задержки между
+	// подпиской и первым трейдом (несколько секунд на открытие 460 gRPC-стримов).
+	for _, pair := range app.pairs {
+		for _, period := range app.periods {
+			if period.Duration >= seedMinPeriod {
+				continue
+			}
+			app.mtx.Lock()
+			app.candles[pair][period.Name] = coldStartCandle(pair, period)
+			app.markHealOnClose(pair, period.Name)
+			app.mtx.Unlock()
+		}
 	}
 
 	for _, pair := range app.pairs {
@@ -202,6 +227,15 @@ func (app *Application) onTrade(ctx context.Context, trade exModel.Trade) {
 		}
 
 	}
+}
+
+// markHealOnClose помечает бакет пары/периода как требующий heal при закрытии
+// (см. healOnClose в Application и WriteTrade). Вызывающий обязан держать app.mtx.
+func (app *Application) markHealOnClose(pair, periodName string) {
+	if app.healOnClose[pair] == nil {
+		app.healOnClose[pair] = make(map[string]bool)
+	}
+	app.healOnClose[pair][periodName] = true
 }
 
 func (app *Application) WriteCandleBuffer(candle exModel.Candle, period iModel.Periods) {
@@ -426,7 +460,7 @@ loop:
 		appLogger.Errorf("heal-on-close: pair %s period %s insert: %v", pair, period.Name, err)
 		return
 	}
-	appLogger.Infof("heal-on-close: pair %s period %s bucket %s healed (trades=%d)", pair, period.Name, bucketStart, final.AmountTrade)
+	appLogger.Debugf("heal-on-close: pair %s period %s bucket %s healed (trades=%d)", pair, period.Name, bucketStart, final.AmountTrade)
 }
 
 func findNextMultipleTime(t time.Time, interval time.Duration) time.Time {

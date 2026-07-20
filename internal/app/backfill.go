@@ -14,6 +14,12 @@ import (
 
 const candlePeriod1m = "1m"
 
+// backfillRetryDelays — общие задержки между попытками: и для докачки 1m с биржи
+// (ретрай пары целиком в RunBackfill), и для вставки уже посчитанных агрегатов
+// (локальный ретрай в insertAggregatedWithRetry) — оба идемпотентны благодаря
+// upsert по (pair, time).
+var backfillRetryDelays = []time.Duration{time.Second, 5 * time.Second, 15 * time.Second}
+
 // RunBackfill докачивает пропущенные (уже полностью закрытые) свечи по всем парам за
 // время, прошедшее с последнего heartbeat, и агрегирует из них остальные таймфреймы.
 // Запускается на каждом старте безусловно — сама докачка дешёвая (диапазон обычно мал),
@@ -33,7 +39,8 @@ func (app *Application) RunBackfill(ctx context.Context, threshold time.Duration
 		return nil
 	}
 
-	now := time.Now()
+	runStart := time.Now()
+	now := runStart
 	gap := now.Sub(last)
 	if gap <= threshold {
 		appLogger.Infof("backfill: gap since last heartbeat is %s (routine restart), backfilling any closed candles for %d pairs", gap, len(app.pairs))
@@ -59,8 +66,11 @@ func (app *Application) RunBackfill(ctx context.Context, threshold time.Duration
 	}
 	sem := make(chan struct{}, workers)
 
-	var failed atomic.Int64
-	retryDelays := []time.Duration{time.Second, 5 * time.Second, 15 * time.Second}
+	var (
+		failedPairs     atomic.Int64
+		aggregateFailed atomic.Int64
+		totalInserted   atomic.Int64
+	)
 
 	g, gCtx := errgroup.WithContext(ctx)
 	for _, pair := range app.pairs {
@@ -74,25 +84,30 @@ func (app *Application) RunBackfill(ctx context.Context, threshold time.Duration
 			defer func() { <-sem }()
 
 			// Повторные попытки идемпотентны благодаря upsert по (pair, time).
-			var err error
-			for attempt := 0; attempt <= len(retryDelays); attempt++ {
-				err = app.backfillPair(gCtx, pair, fetchStart, now)
+			var (
+				inserted int
+				err      error
+			)
+			for attempt := 0; attempt <= len(backfillRetryDelays); attempt++ {
+				inserted, err = app.backfillPair(gCtx, pair, fetchStart, now, &aggregateFailed)
 				if err == nil || gCtx.Err() != nil {
 					break
 				}
 				appLogger.Warnf("backfill: pair %s attempt %d failed: %v", pair, attempt+1, err)
-				if attempt < len(retryDelays) {
+				if attempt < len(backfillRetryDelays) {
 					select {
-					case <-time.After(retryDelays[attempt]):
+					case <-time.After(backfillRetryDelays[attempt]):
 					case <-gCtx.Done():
 					}
 				}
 			}
 			if err != nil {
 				// Ошибка по одной паре не должна останавливать бэкофилл остальных.
-				appLogger.Errorf("backfill: pair %s failed after %d attempts: %v", pair, len(retryDelays)+1, err)
-				failed.Add(1)
+				appLogger.Errorf("backfill: pair %s failed after %d attempts: %v", pair, len(backfillRetryDelays)+1, err)
+				failedPairs.Add(1)
+				return nil
 			}
+			totalInserted.Add(int64(inserted))
 			return nil
 		})
 	}
@@ -101,8 +116,11 @@ func (app *Application) RunBackfill(ctx context.Context, threshold time.Duration
 		return err
 	}
 
-	if n := failed.Load(); n > 0 {
+	if n := failedPairs.Load(); n > 0 {
 		appLogger.Errorf("backfill: %d/%d pairs failed; their ranges will NOT be retried automatically", n, len(app.pairs))
+	}
+	if n := aggregateFailed.Load(); n > 0 {
+		appLogger.Errorf("backfill: %d pair/period aggregate inserts failed after retries (1m data is intact, aggregated candle for that bucket is missing)", n)
 	}
 
 	// Сдвигаем heartbeat вперёд независимо от того, все ли пары докачались успешно:
@@ -111,11 +129,15 @@ func (app *Application) RunBackfill(ctx context.Context, threshold time.Duration
 		appLogger.Errorf("backfill: failed to update heartbeat after backfill: %v", err)
 	}
 
-	appLogger.Infof("backfill: done")
+	appLogger.Infof("backfill: done, %d 1m candles inserted across %d/%d pairs in %s",
+		totalInserted.Load(), len(app.pairs)-int(failedPairs.Load()), len(app.pairs), time.Since(runStart))
 	return nil
 }
 
-func (app *Application) backfillPair(ctx context.Context, pair string, start, end time.Time) error {
+// backfillPair докачивает и вставляет закрытые 1m-свечи пары, затем агрегирует их в
+// остальные периоды. Возвращает число вставленных 1m-свечей (0 при ошибке или пустом
+// диапазоне) — используется RunBackfill только для итоговой сводки в логе.
+func (app *Application) backfillPair(ctx context.Context, pair string, start, end time.Time, aggregateFailed *atomic.Int64) (int, error) {
 	candlesChan, errChan := app.dataFeed.HistoricalCandles(ctx, pair, candlePeriod1m, start, end)
 
 	candles1m := make([]exModel.Candle, 0)
@@ -133,10 +155,10 @@ loop:
 				continue
 			}
 			if err != nil {
-				return fmt.Errorf("fetch historical candles: %w", err)
+				return 0, fmt.Errorf("fetch historical candles: %w", err)
 			}
 		case <-ctx.Done():
-			return ctx.Err()
+			return 0, ctx.Err()
 		}
 	}
 
@@ -146,7 +168,7 @@ loop:
 	// продюсер всегда закрывает errChan.
 	if errChan != nil {
 		if err, ok := <-errChan; ok && err != nil {
-			return fmt.Errorf("fetch historical candles: %w", err)
+			return 0, fmt.Errorf("fetch historical candles: %w", err)
 		}
 	}
 
@@ -155,12 +177,12 @@ loop:
 	closed := closedCandles(candles1m, time.Minute, end)
 
 	if len(closed) == 0 {
-		appLogger.Infof("backfill: pair %s has no closed historical candles in range", pair)
-		return nil
+		appLogger.Debugf("backfill: pair %s has no closed historical candles in range", pair)
+		return 0, nil
 	}
 
 	if err := database.InsertCandles(app.database, closed, candlePeriod1m); err != nil {
-		return fmt.Errorf("insert 1m candles: %w", err)
+		return 0, fmt.Errorf("insert 1m candles: %w", err)
 	}
 
 	for _, period := range app.periods {
@@ -168,13 +190,39 @@ loop:
 			continue
 		}
 		aggregated := closedCandles(aggregateCandles(closed, period), period.Duration, end)
-		if err := database.InsertCandles(app.database, aggregated, period.Name); err != nil {
-			appLogger.Errorf("backfill: pair %s aggregate %s failed: %v", pair, period.Name, err)
+		if len(aggregated) == 0 {
+			continue
+		}
+		if err := app.insertAggregatedWithRetry(ctx, aggregated, period.Name); err != nil {
+			appLogger.Errorf("backfill: pair %s aggregate %s failed after retries: %v", pair, period.Name, err)
+			aggregateFailed.Add(1)
 		}
 	}
 
-	appLogger.Infof("backfill: pair %s done, %d 1m candles inserted", pair, len(closed))
-	return nil
+	appLogger.Debugf("backfill: pair %s done, %d 1m candles inserted", pair, len(closed))
+	return len(closed), nil
+}
+
+// insertAggregatedWithRetry ретраит вставку уже посчитанных агрегированных свечей.
+// Данные уже в памяти (пересчёт с биржи не нужен — в отличие от ретрая всей пары
+// в RunBackfill), поэтому ретраится только сам insert: этого достаточно против
+// временных проблем вроде дедлоков MySQL при параллельной вставке разных пар.
+func (app *Application) insertAggregatedWithRetry(ctx context.Context, candles []exModel.Candle, periodName string) error {
+	var err error
+	for attempt := 0; attempt <= len(backfillRetryDelays); attempt++ {
+		err = database.InsertCandles(app.database, candles, periodName)
+		if err == nil {
+			return nil
+		}
+		if attempt < len(backfillRetryDelays) {
+			select {
+			case <-time.After(backfillRetryDelays[attempt]):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+	return err
 }
 
 // closedCandles отбрасывает свечи, чей бакет [Time, Time+duration) ещё не закрылся
